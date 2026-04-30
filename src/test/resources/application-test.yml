@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:oficina;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+
+app:
+  jwt:
+    secret: teste-teste-teste-teste-teste-teste-teste-teste
+    expires-in-minutes: 60
+  cors:
+    allowed-origins: http://localhost:5173
+  seed:
+    admin-email: admin@oficina.com
+    admin-password: Admin@123

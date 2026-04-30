@@ -1,0 +1,44 @@
+server:
+  port: ${APP_PORT:3000}
+
+spring:
+  application:
+    name: oficina-mvp-backend
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:oficina_mvp}
+    username: ${DB_USER:oficina}
+    password: ${DB_PASSWORD:oficina}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:troque-este-segredo-em-producao-com-pelo-menos-32-caracteres}
+    expires-in-minutes: ${JWT_EXPIRES_IN_MINUTES:480}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+  seed:
+    admin-email: ${SEED_ADMIN_EMAIL:admin@oficina.com}
+    admin-password: ${SEED_ADMIN_PASSWORD:Admin@123}
