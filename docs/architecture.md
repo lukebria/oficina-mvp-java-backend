@@ -60,7 +60,7 @@ Também é permitido que a criação da OS vá diretamente de `RECEBIDA` para `A
   - `/swagger-ui.html`
   - `/v3/api-docs/**`
 
-## Banco
+## Banco de dados
 
 O banco é PostgreSQL, versionado por Flyway. O modelo é relacional:
 
