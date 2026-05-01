@@ -30,7 +30,6 @@ public class Part extends BaseEntity {
 
     protected Part() {}
     
-    /*TODO: VERIFICAR SE O CONSTRUTOR SE PRECISAMOS ENRIQUECER ISSO DEPOIS.*/
     public Part(String name, String sku, BigDecimal unitPrice, Integer stockQuantity, Integer minStock, Boolean active) {
         this.name = name;
         this.sku = normalizeSku(sku);
