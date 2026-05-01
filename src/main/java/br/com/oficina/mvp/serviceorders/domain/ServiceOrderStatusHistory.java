@@ -1,19 +1,8 @@
 package br.com.oficina.mvp.serviceorders.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "service_order_status_history")
@@ -33,9 +22,11 @@ public class ServiceOrderStatusHistory {
     private String comment;
 
     @Column(name = "changed_at", nullable = false)
-    private OffsetDateTime changedAt;
+    private LocalDateTime changedAt;
 
-    protected ServiceOrderStatusHistory() {}
+
+    protected ServiceOrderStatusHistory() {
+    }
 
     public ServiceOrderStatusHistory(ServiceOrder serviceOrder, ServiceOrderStatus status, String comment) {
         this.serviceOrder = serviceOrder;
@@ -44,10 +35,25 @@ public class ServiceOrderStatusHistory {
     }
 
     @PrePersist
-    void prePersist() { this.changedAt = OffsetDateTime.now(); }
+    public void prePersist() {
+        if (changedAt == null) {
+            changedAt = LocalDateTime.now();
+        }
+    }
 
-    public Long getId() { return id; }
-    public ServiceOrderStatus getStatus() { return status; }
-    public String getComment() { return comment; }
-    public OffsetDateTime getChangedAt() { return changedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public ServiceOrderStatus getStatus() {
+        return status;
+    }
+
+    public String getComment() {
+        return comment;
+    }
+
+    public LocalDateTime getChangedAt() {
+        return changedAt;
+    }
 }

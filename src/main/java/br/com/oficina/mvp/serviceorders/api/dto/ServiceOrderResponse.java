@@ -34,15 +34,43 @@ public record ServiceOrderResponse(
                 order.getId(),
                 order.getCode(),
                 order.getStatus(),
-                new CustomerView(order.getCustomer().getId(), order.getCustomer().getName(), order.getCustomer().getDocument()),
-                new VehicleView(order.getVehicle().getId(), order.getVehicle().getPlate(), order.getVehicle().getBrand(), order.getVehicle().getModel(), order.getVehicle().getYear()),
+                new CustomerView(
+                        order.getCustomer().getId(),
+                        order.getCustomer().getName(),
+                        order.getCustomer().getDocument()
+                ),
+                new VehicleView(
+                        order.getVehicle().getId(),
+                        order.getVehicle().getPlate(),
+                        order.getVehicle().getBrand(),
+                        order.getVehicle().getModel(),
+                        order.getVehicle().getYear()
+                ),
                 order.getCustomerNotes(),
-                new BudgetView(order.getTotalServices(), order.getTotalParts(), order.getTotalAmount()),
-                order.getServices().stream().map(OrderServiceView::from).toList(),
-                order.getParts().stream().map(OrderPartView::from).toList(),
-                order.getHistory().stream().sorted(Comparator.comparing(ServiceOrderStatusHistory::getChangedAt)).map(HistoryView::from).toList(),
-                order.getApprovedAt(), order.getStartedAt(), order.getFinalizedAt(), order.getDeliveredAt(),
-                order.getCreatedAt(), order.getUpdatedAt()
+                new BudgetView(
+                        order.getTotalServices(),
+                        order.getTotalParts(),
+                        order.getTotalAmount()
+                ),
+                order.getServices().stream()
+                        .map(OrderServiceView::from)
+                        .toList(),
+                order.getParts().stream()
+                        .map(OrderPartView::from)
+                        .toList(),
+                order.getHistory().stream()
+                        .sorted(Comparator.comparing(
+                                ServiceOrderStatusHistory::getChangedAt,
+                                Comparator.nullsLast(Comparator.naturalOrder())
+                        ))
+                        .map(HistoryView::from)
+                        .toList(),
+                order.getApprovedAt(),
+                order.getStartedAt(),
+                order.getFinalizedAt(),
+                order.getDeliveredAt(),
+                order.getCreatedAt(),
+                order.getUpdatedAt()
         );
     }
 
@@ -62,7 +90,7 @@ public record ServiceOrderResponse(
         }
     }
 
-    public record HistoryView(Long id, ServiceOrderStatus status, String comment, OffsetDateTime changedAt) {
+    public record HistoryView(Long id, ServiceOrderStatus status, String comment, java.time.LocalDateTime changedAt) {
         static HistoryView from(ServiceOrderStatusHistory history) {
             return new HistoryView(history.getId(), history.getStatus(), history.getComment(), history.getChangedAt());
         }

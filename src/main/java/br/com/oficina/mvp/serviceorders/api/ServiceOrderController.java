@@ -2,7 +2,6 @@ package br.com.oficina.mvp.serviceorders.api;
 
 import br.com.oficina.mvp.serviceorders.api.dto.CreateServiceOrderRequest;
 import br.com.oficina.mvp.serviceorders.api.dto.CustomerApprovalRequest;
-import br.com.oficina.mvp.serviceorders.api.dto.PublicServiceOrderResponse;
 import br.com.oficina.mvp.serviceorders.api.dto.ServiceOrderResponse;
 import br.com.oficina.mvp.serviceorders.api.dto.UpdateStatusRequest;
 import br.com.oficina.mvp.serviceorders.application.ServiceOrderApplicationService;
