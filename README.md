@@ -226,7 +226,7 @@ GET /api/reports/average-execution-time
 RECEBIDA -> EM_DIAGNOSTICO -> AGUARDANDO_APROVACAO -> EM_EXECUCAO -> FINALIZADA -> ENTREGUE
 ```
 
-Também é permitido criar a OS já com orçamento calculado e status `AGUARDANDO_APROVACAO`, como no projeto TypeScript anexado.
+Também é permitido criar a OS já com orçamento calculado e status `AGUARDANDO_APROVACAO`.
 
 ## Testes
 
@@ -248,5 +248,4 @@ target/site/jacoco/index.html
 
 ## Observação importante
 
-O projeto foi estruturado para Java 25 e Spring Boot 4. Para rodar fora do Docker, confirme que seu `JAVA_HOME` 
-aponta para um JDK 25.
+Projeto foi estruturado para Java 25 e Spring Boot 4.
