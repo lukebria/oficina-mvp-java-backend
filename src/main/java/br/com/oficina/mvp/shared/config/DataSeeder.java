@@ -1,12 +1,12 @@
 package br.com.oficina.mvp.shared.config;
 
-import br.com.oficina.mvp.auth.domain.Role;
-import br.com.oficina.mvp.auth.domain.User;
-import br.com.oficina.mvp.auth.infra.UserRepository;
-import br.com.oficina.mvp.catalog.domain.ServiceCatalogItem;
-import br.com.oficina.mvp.catalog.infra.ServiceCatalogItemRepository;
-import br.com.oficina.mvp.parts.domain.Part;
-import br.com.oficina.mvp.parts.infra.PartRepository;
+import br.com.oficina.mvp.dtos.enums.Role;
+import br.com.oficina.mvp.domains.User;
+import br.com.oficina.mvp.infra.UserRepository;
+import br.com.oficina.mvp.domains.ServiceCatalogItem;
+import br.com.oficina.mvp.infra.ServiceCatalogItemRepository;
+import br.com.oficina.mvp.domains.Part;
+import br.com.oficina.mvp.infra.PartRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
