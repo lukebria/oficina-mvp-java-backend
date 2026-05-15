@@ -18,27 +18,57 @@ o backend inclui essas entidades, funionalidades e objetos de valor:
 
 ## Decisões de arquitetura
 
-O sistema é um **monolito em camadas com DDD**.
+O projeto foi estruturado como um **monolito em camadas**, adotando uma abordagem pragmática de **DDD (Domain-Driven Design)**.
+
+Na prática, isso significa que a aplicação está concentrada em um único deploy/backend, mas organizada em camadas com 
+responsabilidades bem definidas, separando entrada HTTP, regras de aplicação, domínio, persistência e recursos compartilhados.
+
+A abordagem de DDD é pragmática porque o projeto não aplica todos os padrões de DDD de forma rígida, como agregados complexos, 
+bounded contexts isolados ou módulos separados por domínio. Ainda assim, ele preserva conceitos importantes, como entidades
+de domínio, regras encapsuladas nas entidades, políticas de domínio e serviços de aplicação responsáveis por orquestrar os casos de uso.
+
+A separação atual do código é feita por responsabilidade técnica, não por módulos de domínio isolados. Ou seja:
+em vez de existir uma pasta para cada contexto de negócio, como `customers/`, `vehicles/` ou `serviceorders/`, 
+o projeto concentra as classes nas camadas abaixo:
 
 ```txt
 src/main/java/br/com/oficina/mvp/
-  auth/            autenticação, usuário e JWT
-  customers/       domínio, aplicação, infra e API de clientes
-  vehicles/        domínio, aplicação, infra e API de veículos
-  catalog/         domínio, aplicação, infra e API de serviços
-  parts/           domínio, aplicação, infra e API de peças
-  serviceorders/   domínio crítico da OS, casos de uso, API e relatório
-  shared/          exceções, segurança, validações, auditoria temporal
+  controllers/     endpoints REST da API
+  domains/         entidades centrais do dominio do négocio e regras de domínio acopladas às entidades
+  dtos/            objetos de entrada e saída da API - Não mutaveis.
+  infra/           repositórios Spring Data JPA
+  services/        casos de uso, orquestração e regras de aplicação
+  shared/          configurações, segurança, exceções e validações reutilizáveis
 ```
 
-A camada de domínio é mais rica onde o negócio é mais sensível:
+As principais regras de negócio ficam centralizadas nas entidades de domínio e nos serviços de aplicação.
+
+Detalhamento de camadas:
+
+- `controllers`: camada de entrada da API. Recebe as requisições HTTP, valida os DTOs recebidos e encaminha a execução para os serviços responsáveis;
+- `services`: camada de aplicação. Orquestra os principais fluxos, como autenticação, cadastros, criação e 
+- aprovação de ordens de serviço, mudanças de status, baixa de estoque e geração de relatórios;
+- `dtos`: camada para representação de objetos de entrada e saida de apis, objetos não mutaveis e enumerators.
+- `domains`: camada de domínio. Contém as entidades centrais do negócio, como cliente, veículo, peça, serviço de catálogo, 
+- usuário, ordem de serviço e histórico de status. Também concentra comportamentos próprios dessas entidades, como cálculo 
+- de totais, inclusão de itens e validação de transições de status da OS;
+- `infra`: camada de infraestrutura. Centraliza os contratos de persistência e comunicação com o banco de dados, utilizando Spring Data JPA;
+- `shared`: camada de recursos compartilhados. Reúne funcionalidades transversais da aplicação, como segurança JWT, CORS,
+- tratamento global de erros, seed inicial, documentação OpenAPI, exceções de negócio e validadores reutilizáveis.
+
+As regras de domínio mais relevantes estão concentradas principalmente no fluxo de Ordem de Serviço:
 
 - validação de CPF/CNPJ;
 - validação de placa brasileira;
 - política de transição de status da OS;
-- cálculo de orçamento;
-- baixa de estoque no momento de aprovação;
-- histórico de status.
+- cálculo automático de orçamento com serviços e peças;
+- validação de estoque antes da aprovação;
+- baixa de estoque no momento da aprovação;
+- registro de histórico de status.
+
+Essa estrutura favorece legibilidade e velocidade de desenvolvimento para o MVP. Caso o sistema cresça, 
+uma evolução natural seria reorganizar o código por domínio/contexto, separando pacotes como 
+`customers`, `vehicles`, `catalog`, `parts`, `serviceorders` e `auth`, cada um com suas próprias camadas internas.
 
 ## Como rodar localmente
 

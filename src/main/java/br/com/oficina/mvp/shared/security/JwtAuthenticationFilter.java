@@ -1,6 +1,6 @@
 package br.com.oficina.mvp.shared.security;
 
-import br.com.oficina.mvp.auth.infra.UserRepository;
+import br.com.oficina.mvp.infra.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
