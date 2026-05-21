@@ -1,5 +1,7 @@
 package br.com.oficina.mvp.serviceorders.domain;
 
+import br.com.oficina.mvp.domains.ServiceOrderStatusPolicy;
+import br.com.oficina.mvp.dtos.enums.ServiceOrderStatus;
 import br.com.oficina.mvp.shared.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 
