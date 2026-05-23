@@ -35,7 +35,8 @@ public class VehicleService {
         var customer = customerService.findEntity(request.customerId());
         var plate = PlateValidator.normalize(request.plate());
         validatePlate(plate);
-        return VehicleResponseDto.from(vehicles.save(new Vehicle(customer, plate, request.brand(), request.model(), request.year())));
+        return VehicleResponseDto.from(vehicles.save(new Vehicle(customer, plate, request.brand(), request.model(),
+                request.manufacturingYear())));
     }
 
     @Transactional
@@ -44,7 +45,7 @@ public class VehicleService {
         var customer = customerService.findEntity(request.customerId());
         var plate = PlateValidator.normalize(request.plate());
         validatePlate(plate);
-        vehicle.update(customer, plate, request.brand(), request.model(), request.year());
+        vehicle.update(customer, plate, request.brand(), request.model(), request.manufacturingYear());
         return VehicleResponseDto.from(vehicle);
     }
 

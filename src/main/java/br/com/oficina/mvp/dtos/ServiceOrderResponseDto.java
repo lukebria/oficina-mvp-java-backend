@@ -44,7 +44,7 @@ public record ServiceOrderResponseDto(
                         order.getVehicle().getPlate(),
                         order.getVehicle().getBrand(),
                         order.getVehicle().getModel(),
-                        order.getVehicle().getYear()
+                        order.getVehicle().getManufacturingYear()
                 ),
                 order.getCustomerNotes(),
                 new BudgetView(
@@ -75,7 +75,7 @@ public record ServiceOrderResponseDto(
     }
 
     public record CustomerView(Long id, String name, String document) {}
-    public record VehicleView(Long id, String plate, String brand, String model, Integer year) {}
+    public record VehicleView(Long id, String plate, String brand, String model, Integer manufacturingYear) {}
     public record BudgetView(BigDecimal totalServices, BigDecimal totalParts, BigDecimal totalAmount) {}
 
     public record OrderServiceView(Long id, Long serviceItemId, String name, Integer quantity, BigDecimal unitPrice, BigDecimal totalPrice) {

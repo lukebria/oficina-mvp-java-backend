@@ -86,9 +86,9 @@ public class ServiceOrderApplicationService {
 
         var vehicle = vehicles.findByPlate(plate)
                 .orElseGet(() -> vehicles.save(new Vehicle(
-                        customer, plate, request.vehicle().brand(), request.vehicle().model(), request.vehicle().year()
+                        customer, plate, request.vehicle().brand(), request.vehicle().model(), request.vehicle().manufacturingYear()
                 )));
-        vehicle.update(customer, plate, request.vehicle().brand(), request.vehicle().model(), request.vehicle().year());
+        vehicle.update(customer, plate, request.vehicle().brand(), request.vehicle().model(), request.vehicle().manufacturingYear());
 
         var order = new ServiceOrder(generateOrderCode(), customer, vehicle, request.customerNotes());
 

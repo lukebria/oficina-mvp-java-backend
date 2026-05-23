@@ -29,7 +29,7 @@ public record CreateServiceOrderRequestDto(
             @NotBlank @Size(min = 7, max = 8) String plate,
             @NotBlank @Size(min = 2) String brand,
             @NotBlank String model,
-            @NotNull @Min(1900) Integer year
+            @NotNull @Min(1900) Integer manufacturingYear
     ) {}
 
     public record ServiceItemData(

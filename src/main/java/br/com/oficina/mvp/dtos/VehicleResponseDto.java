@@ -10,14 +10,14 @@ public record VehicleResponseDto(
         String plate,
         String brand,
         String model,
-        Integer year,
+        Integer manufacturingYear,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {
     public static VehicleResponseDto from(Vehicle vehicle) {
         return new VehicleResponseDto(
                 vehicle.getId(), vehicle.getCustomer().getId(), vehicle.getCustomer().getName(),
-                vehicle.getPlate(), vehicle.getBrand(), vehicle.getModel(), vehicle.getYear(),
+                vehicle.getPlate(), vehicle.getBrand(), vehicle.getModel(), vehicle.getManufacturingYear(),
                 vehicle.getCreatedAt(), vehicle.getUpdatedAt()
         );
     }

@@ -24,17 +24,17 @@ public class Vehicle extends BaseEntity {
     @Column(nullable = false)
     private String model;
 
-    @Column(nullable = false)
-    private Integer year;
+    @Column(name = "manufacturing_year", nullable = false)
+    private Integer manufacturingYear;
 
     protected Vehicle() {}
 
-    public Vehicle(Customer customer, String plate, String brand, String model, Integer year) {
+    public Vehicle(Customer customer, String plate, String brand, String model, Integer manufacturingYear) {
         this.customer = customer;
         this.plate = plate;
         this.brand = brand;
         this.model = model;
-        this.year = year;
+        this.manufacturingYear = manufacturingYear;
     }
 
     public void update(Customer customer, String plate, String brand, String model, Integer year) {
@@ -42,12 +42,12 @@ public class Vehicle extends BaseEntity {
         if (plate != null) this.plate = plate;
         if (brand != null) this.brand = brand;
         if (model != null) this.model = model;
-        if (year != null) this.year = year;
+        if (year != null) this.manufacturingYear = year;
     }
 
     public Customer getCustomer() { return customer; }
     public String getPlate() { return plate; }
     public String getBrand() { return brand; }
     public String getModel() { return model; }
-    public Integer getYear() { return year; }
+    public Integer getManufacturingYear() { return manufacturingYear; }
 }

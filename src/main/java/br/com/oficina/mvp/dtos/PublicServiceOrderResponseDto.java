@@ -22,12 +22,13 @@ public record PublicServiceOrderResponseDto(
                 order.getCode(),
                 order.getStatus(),
                 order.getCustomer().getName(),
-                new VehicleView(order.getVehicle().getPlate(), order.getVehicle().getBrand(), order.getVehicle().getModel(), order.getVehicle().getYear()),
+                new VehicleView(order.getVehicle().getPlate(), order.getVehicle().getBrand(), order.getVehicle().getModel(),
+                        order.getVehicle().getManufacturingYear()),
                 new BudgetView(order.getTotalServices(), order.getTotalParts(), order.getTotalAmount()),
                 full.services(), full.parts(), full.history()
         );
     }
 
-    public record VehicleView(String plate, String brand, String model, Integer year) {}
+    public record VehicleView(String plate, String brand, String model, Integer manufacturingYear) {}
     public record BudgetView(BigDecimal totalServices, BigDecimal totalParts, BigDecimal totalAmount) {}
 }
