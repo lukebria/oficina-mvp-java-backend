@@ -186,6 +186,7 @@ class ServiceOrderApplicationServiceTest {
     void shouldRejectApprovalWithInsufficientStock() {
         var order = orderWaitingApproval();
         part = new Part("Filtro", "FLT-001", new BigDecimal("35.00"), 1, 2, true);
+        ReflectionTestUtils.setField(part, "id", 1L);
         order.addPart(new WorkOrderPart(part, 2));
         ReflectionTestUtils.setField(order, "id", 1L);
         when(serviceOrders.findById(1L)).thenReturn(Optional.of(order));

@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
@@ -168,8 +169,11 @@ public class ServiceOrderApplicationService {
         for (var orderPart : order.getParts()) {
             Part part = orderPart.getPart();
             if (part.getStockQuantity() < orderPart.getQuantity()) {
-                throw new BusinessException("Estoque insuficiente para a peça " + part.getName() + ".", HttpStatus.UNPROCESSABLE_CONTENT,
-                        Map.of("partId", part.getId(), "available", part.getStockQuantity(), "requested", orderPart.getQuantity()));
+                var details = new HashMap<String, Object>();
+                details.put("partId", part.getId());
+                details.put("available", part.getStockQuantity());
+                details.put("requested", orderPart.getQuantity());
+                throw new BusinessException("Estoque insuficiente para a peça " + part.getName() + ".", HttpStatus.UNPROCESSABLE_CONTENT, details);
             }
         }
     }
