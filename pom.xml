@@ -164,7 +164,9 @@
                         <configuration>
                             <includes>
                                 <include>br/com/oficina/mvp/shared/validation/*</include>
-                                <include>br/com/oficina/mvp/serviceorders/domain/ServiceOrderStatusPolicy*</include>
+                                <include>br/com/oficina/mvp/domains/ServiceOrderStatusPolicy*</include>
+                                <include>br/com/oficina/mvp/domains/ServiceOrder*</include>
+                                <include>br/com/oficina/mvp/services/*</include>
                             </includes>
                             <rules>
                                 <rule>

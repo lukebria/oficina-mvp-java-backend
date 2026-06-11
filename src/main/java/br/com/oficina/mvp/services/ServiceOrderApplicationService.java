@@ -168,7 +168,7 @@ public class ServiceOrderApplicationService {
         for (var orderPart : order.getParts()) {
             Part part = orderPart.getPart();
             if (part.getStockQuantity() < orderPart.getQuantity()) {
-                throw new BusinessException("Estoque insuficiente para a peça " + part.getName() + ".", HttpStatus.UNPROCESSABLE_ENTITY,
+                throw new BusinessException("Estoque insuficiente para a peça " + part.getName() + ".", HttpStatus.UNPROCESSABLE_CONTENT,
                         Map.of("partId", part.getId(), "available", part.getStockQuantity(), "requested", orderPart.getQuantity()));
             }
         }
