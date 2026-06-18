@@ -1,78 +1,110 @@
 # Oficina MVP Backend — Java 25 + Spring Boot 4
 
-Back-end monolítico em **Java 25**, **Maven**, **Spring Boot 4**, **PostgreSQL**, **JPA/Hibernate**, **Flyway**, **JWT** 
-e **Swagger/OpenAPI**.
+Back-end monolítico para um MVP de **oficina mecânica**, desenvolvido com **Java 25**, **Spring Boot 4**, **Maven**, *
+*PostgreSQL**, **JPA/Hibernate**, **Flyway**, **Spring Security**, **JWT** e **Swagger/OpenAPI**.
 
-Este projeto é uma abstração de um negocio de uma oficina mecanica,
-o backend inclui essas entidades, funionalidades e objetos de valor:
+O projeto permite gerenciar clientes, veículos, catálogo de serviços, peças/insumos, ordens de serviço, orçamento
+automático, aprovação pelo cliente, histórico de status e relatório de tempo médio de execução.
 
-- clientes;
-- veículos;
-- catálogo de serviços;
-- peças/insumos com estoque;
-- ordens de serviço;
-- histórico de status;
-- orçamento automático;
-- aprovação pelo cliente;
-- relatório de tempo médio de execução.
+## Sumário
 
-## Decisões de arquitetura
+- [Stack](#stack)
+- [Funcionalidades](#funcionalidades)
+- [Arquitetura do projeto](#arquitetura-do-projeto)
+- [Como rodar localmente](#como-rodar-localmente)
+- [Como rodar com Docker](#como-rodar-com-docker)
+- [Variáveis de ambiente](#variáveis-de-ambiente)
+- [Usuário admin inicial](#usuário-admin-inicial)
+- [Autenticação](#autenticação)
+- [Endpoints principais](#endpoints-principais)
+- [Payloads úteis](#payloads-úteis)
+- [Banco de dados](#banco-de-dados)
+- [Testes e cobertura](#testes-e-cobertura)
+- [Documentação complementar](#documentação-complementar)
+- [Pontos de atenção](#pontos-de-atenção)
 
-O projeto foi estruturado como um **monolito em camadas**, adotando uma abordagem pragmática de **DDD (Domain-Driven Design)**.
+## Stack
 
-Na prática, isso significa que a aplicação está concentrada em um único deploy/backend, mas organizada em camadas com 
-responsabilidades bem definidas, separando entrada HTTP, regras de aplicação, domínio, persistência e recursos compartilhados.
+| Item                | Tecnologia                     |
+|---------------------|--------------------------------|
+| Linguagem           | Java 25                        |
+| Framework           | Spring Boot 4.0.6              |
+| Build               | Maven                          |
+| API                 | Spring WebMVC                  |
+| Persistência        | Spring Data JPA / Hibernate    |
+| Banco               | PostgreSQL                     |
+| Migrações           | Flyway                         |
+| Segurança           | Spring Security + JWT Bearer   |
+| JWT                 | JJWT 0.12.6                    |
+| Validação           | Jakarta Bean Validation        |
+| Documentação da API | SpringDoc OpenAPI / Swagger UI |
+| Observabilidade     | Spring Boot Actuator           |
+| Testes              | JUnit 5, Mockito, MockMvc, H2  |
+| Cobertura           | JaCoCo                         |
+| Container           | Docker + Docker Compose        |
 
-A abordagem de DDD é pragmática porque o projeto não aplica todos os padrões de DDD de forma rígida, como agregados complexos, 
-bounded contexts isolados ou módulos separados por domínio. Ainda assim, ele preserva conceitos importantes, como entidades
-de domínio, regras encapsuladas nas entidades, políticas de domínio e serviços de aplicação responsáveis por orquestrar os casos de uso.
+## Funcionalidades
 
-A separação atual do código é feita por responsabilidade técnica, não por módulos de domínio isolados. Ou seja:
-em vez de existir uma pasta para cada contexto de negócio, como `customers/`, `vehicles/` ou `serviceorders/`, 
-o projeto concentra as classes nas camadas abaixo:
+- Login administrativo com JWT.
+- CRUD de clientes.
+- CRUD de veículos vinculados a clientes.
+- CRUD de serviços do catálogo da oficina.
+- CRUD de peças/insumos com estoque e estoque mínimo.
+- Criação de ordem de serviço com cliente, veículo, serviços e peças.
+- Geração automática de orçamento da OS.
+- Cálculo automático de total de serviços, total de peças e total geral.
+- Consulta pública de OS por código e CPF/CNPJ.
+- Aprovação pública do orçamento pelo cliente.
+- Aprovação administrativa do orçamento.
+- Validação de estoque antes da aprovação.
+- Baixa automática de estoque na aprovação.
+- Controle de transição de status da OS.
+- Histórico de status da OS.
+- Relatório de tempo médio de execução.
+- Healthcheck da aplicação.
+- Swagger/OpenAPI.
+- Seed inicial de usuário admin, serviços e peças.
+
+## Arquitetura do projeto
+
+O projeto é um **monolito em camadas** com DDD pragmático. Ele não está separado fisicamente por módulos de domínio; a
+estrutura atual usa pacotes por responsabilidade técnica:
 
 ```txt
 src/main/java/br/com/oficina/mvp/
-  controllers/     endpoints REST da API
-  domains/         entidades centrais do dominio do négocio e regras de domínio acopladas às entidades
-  dtos/            objetos de entrada e saída da API - Não mutaveis.
-  infra/           repositórios Spring Data JPA
-  services/        casos de uso, orquestração e regras de aplicação
-  shared/          configurações, segurança, exceções e validações reutilizáveis
+  OficinaMvpApplication.java
+  controllers/       endpoints REST
+  domains/           entidades JPA e regras de domínio
+  domains/base/      entidade base com id, createdAt e updatedAt
+  dtos/              records de request/response
+  dtos/enums/        enums da aplicação
+  infra/             repositórios Spring Data JPA
+  services/          casos de uso e orquestração
+  shared/config/     segurança, CORS, OpenAPI, seed e properties
+  shared/exception/  exceções e handler global
+  shared/security/   filtro e serviço JWT
+  shared/validation/ validadores de CPF/CNPJ e placa
 ```
 
-As principais regras de negócio ficam centralizadas nas entidades de domínio e nos serviços de aplicação.
+As principais regras de negócio ficam em:
 
-Detalhamento de camadas:
-
-- `controllers`: camada de entrada da API. Recebe as requisições HTTP, valida os DTOs recebidos e encaminha a execução para os serviços responsáveis;
-- `services`: camada de aplicação. Orquestra os principais fluxos, como autenticação, cadastros, criação e 
-- aprovação de ordens de serviço, mudanças de status, baixa de estoque e geração de relatórios;
-- `dtos`: camada para representação de objetos de entrada e saida de apis, objetos não mutaveis e enumerators.
-- `domains`: camada de domínio. Contém as entidades centrais do negócio, como cliente, veículo, peça, serviço de catálogo, 
-- usuário, ordem de serviço e histórico de status. Também concentra comportamentos próprios dessas entidades, como cálculo 
-- de totais, inclusão de itens e validação de transições de status da OS;
-- `infra`: camada de infraestrutura. Centraliza os contratos de persistência e comunicação com o banco de dados, utilizando Spring Data JPA;
-- `shared`: camada de recursos compartilhados. Reúne funcionalidades transversais da aplicação, como segurança JWT, CORS,
-- tratamento global de erros, seed inicial, documentação OpenAPI, exceções de negócio e validadores reutilizáveis.
-
-As regras de domínio mais relevantes estão concentradas principalmente no fluxo de Ordem de Serviço:
-
-- validação de CPF/CNPJ;
-- validação de placa brasileira;
-- política de transição de status da OS;
-- cálculo automático de orçamento com serviços e peças;
-- validação de estoque antes da aprovação;
-- baixa de estoque no momento da aprovação;
-- registro de histórico de status.
-
-Essa estrutura favorece legibilidade e velocidade de desenvolvimento para o MVP. Caso o sistema cresça, 
-uma evolução natural seria reorganizar o código por domínio/contexto, separando pacotes como 
-`customers`, `vehicles`, `catalog`, `parts`, `serviceorders` e `auth`, cada um com suas próprias camadas internas.
+- `ServiceOrderApplicationService`: criação, aprovação, validação de estoque, baixa de estoque, consulta pública e
+  status de OS;
+- `ServiceOrder`: cálculo de totais, histórico e timestamps de status;
+- `ServiceOrderStatusPolicy`: transições permitidas de status;
+- `DocumentValidator`: validação de CPF/CNPJ;
+- `PlateValidator`: validação de placa antiga e Mercosul;
+- `Part`: normalização de SKU e baixa de estoque.
 
 ## Como rodar localmente
 
-### 1. Criar `.env`
+### 1. Pré-requisitos
+
+- Java 25.
+- Maven.
+- Docker e Docker Compose, caso queira subir o PostgreSQL localmente via container.
+
+### 2. Criar o arquivo `.env`
 
 Linux/macOS:
 
@@ -86,24 +118,16 @@ Windows PowerShell:
 Copy-Item .env.example .env
 ```
 
-### 2. Subir o banco
+### 3. Subir o PostgreSQL
 
 ```bash
 docker compose up -d postgres
 ```
 
-### 3. Rodar a aplicação
-
-Com Java 25 e Maven instalados:
+### 4. Rodar a aplicação
 
 ```bash
 mvn spring-boot:run
-```
-
-Ou subir tudo com Docker:
-
-```bash
-docker compose up --build
 ```
 
 A API sobe em:
@@ -112,48 +136,125 @@ A API sobe em:
 http://localhost:3000
 ```
 
-Swagger:
+URLs úteis:
 
 ```txt
-http://localhost:3000/swagger-ui.html
+Swagger UI: http://localhost:3000/swagger-ui.html
+OpenAPI:    http://localhost:3000/v3/api-docs
+Health:     http://localhost:3000/api/health
+Actuator:   http://localhost:3000/actuator/health
 ```
 
-Health:
+## Como rodar com Docker
 
-```txt
-http://localhost:3000/api/health
+Para subir banco e API juntos:
+
+```bash
+docker compose up --build
 ```
+
+Para parar:
+
+```bash
+docker compose down
+```
+
+Para remover também o volume do banco:
+
+```bash
+docker compose down -v
+```
+
+O `Dockerfile` usa build multi-stage:
+
+1. imagem Maven com Eclipse Temurin 25 para empacotar o projeto;
+2. imagem JRE Eclipse Temurin 25 para executar o `app.jar`.
+
+## Variáveis de ambiente
+
+As variáveis estão documentadas no `.env.example` e são lidas pelo `application.yml`.
+
+| Variável                 | Padrão                                                         | Descrição                   |
+|--------------------------|----------------------------------------------------------------|-----------------------------|
+| `APP_PORT`               | `3000`                                                         | Porta HTTP da API           |
+| `DB_HOST`                | `localhost`                                                    | Host do PostgreSQL          |
+| `DB_PORT`                | `5432`                                                         | Porta do PostgreSQL         |
+| `DB_NAME`                | `oficina_mvp`                                                  | Nome do banco               |
+| `DB_USER`                | `oficina`                                                      | Usuário do banco            |
+| `DB_PASSWORD`            | `oficina`                                                      | Senha do banco              |
+| `JWT_SECRET`             | `troque-este-segredo-em-producao-com-pelo-menos-32-caracteres` | Segredo de assinatura JWT   |
+| `JWT_EXPIRES_IN_MINUTES` | `480` no `application.yml`; `30` no `.env.example`             | Expiração do JWT em minutos |
+| `CORS_ALLOWED_ORIGINS`   | `http://localhost:5173,http://localhost:3000`                  | Origens permitidas no CORS  |
+| `SEED_ADMIN_EMAIL`       | `admin@oficina.com`                                            | Email do admin inicial      |
+| `SEED_ADMIN_PASSWORD`    | `Admin@123`                                                    | Senha do admin inicial      |
 
 ## Usuário admin inicial
 
-Ao iniciar, o sistema cria automaticamente um usuário admin caso não exista:
+Ao iniciar fora do profile `test`, o sistema cria automaticamente um usuário admin se ele ainda não existir:
 
 ```txt
 email: admin@oficina.com
 senha: Admin@123
 ```
 
-Esses valores podem ser alterados no `.env`.
+Esses valores podem ser alterados no `.env` usando:
 
-## Login
+```txt
+SEED_ADMIN_EMAIL=
+SEED_ADMIN_PASSWORD=
+```
+
+Além do admin, o seed inicial também cria alguns serviços e peças para facilitar testes locais.
+
+## Autenticação
+
+### Login
 
 ```http
 POST /api/auth/login
 Content-Type: application/json
+```
 
+```json
 {
   "email": "admin@oficina.com",
   "password": "Admin@123"
 }
 ```
 
-Use o token retornado nas rotas administrativas:
+Resposta esperada:
+
+```json
+{
+  "token": "<jwt>",
+  "user": {
+    "id": 1,
+    "name": "Administrador",
+    "email": "admin@oficina.com",
+    "role": "ADMIN"
+  }
+}
+```
+
+Use o token nas rotas protegidas:
 
 ```http
 Authorization: Bearer <token>
 ```
 
-## Principais endpoints
+### Rotas públicas
+
+- `POST /api/auth/login`
+- `/api/public/**`
+- `/api/health`
+- `/actuator/health`
+- `/swagger-ui.html`
+- `/swagger-ui/**`
+- `/v3/api-docs/**`
+
+As demais rotas exigem JWT.
+
+## Endpoints principais
 
 ### Auth
 
@@ -181,7 +282,7 @@ PUT    /api/vehicles/{id}
 DELETE /api/vehicles/{id}
 ```
 
-### Serviços
+### Catálogo de serviços
 
 ```http
 GET    /api/services
@@ -201,7 +302,7 @@ PUT    /api/parts/{id}
 DELETE /api/parts/{id}
 ```
 
-### Ordens de serviço
+### Ordens de serviço — fluxo administrativo
 
 ```http
 GET   /api/service-orders
@@ -211,7 +312,7 @@ PATCH /api/service-orders/{id}/approve
 PATCH /api/service-orders/{id}/status
 ```
 
-### Cliente acompanhando OS
+### Ordens de serviço — fluxo público do cliente
 
 ```http
 GET  /api/public/service-orders/{code}?document=12345678909
@@ -224,7 +325,64 @@ POST /api/public/service-orders/{code}/approve
 GET /api/reports/average-execution-time
 ```
 
-## Payload de criação de OS
+### Health
+
+```http
+GET /api/health
+GET /actuator/health
+```
+
+## Payloads úteis
+
+### Criar cliente
+
+```json
+{
+  "name": "Maria Cliente",
+  "document": "12345678909",
+  "email": "maria@email.com",
+  "phone": "11999999999"
+}
+```
+
+### Criar veículo
+
+```json
+{
+  "customerId": 1,
+  "plate": "ABC1D23",
+  "brand": "Toyota",
+  "model": "Corolla",
+  "manufacturingYear": 2022
+}
+```
+
+### Criar serviço do catálogo
+
+```json
+{
+  "name": "Troca de óleo",
+  "description": "Troca de óleo do motor",
+  "basePrice": 180.00,
+  "estimatedMinutes": 60,
+  "active": true
+}
+```
+
+### Criar peça/insumo
+
+```json
+{
+  "name": "Filtro de óleo",
+  "sku": "FILTRO-OLEO-001",
+  "unitPrice": 45.90,
+  "stockQuantity": 25,
+  "minStock": 5,
+  "active": true
+}
+```
+
+### Criar ordem de serviço
 
 ```json
 {
@@ -238,44 +396,224 @@ GET /api/reports/average-execution-time
     "plate": "ABC1D23",
     "brand": "Toyota",
     "model": "Corolla",
-    "year": 2022
+    "manufacturingYear": 2022
   },
   "customerNotes": "Barulho ao frear",
   "services": [
-    { "serviceItemId": 1, "quantity": 1 }
+    {
+      "serviceItemId": 1,
+      "quantity": 1
+    }
   ],
   "parts": [
-    { "partId": 1, "quantity": 1 }
+    {
+      "partId": 1,
+      "quantity": 1
+    }
   ]
+}
+```
+
+Ao criar a OS, o sistema:
+
+1. normaliza e valida CPF/CNPJ;
+2. normaliza e valida placa;
+3. busca ou cria cliente;
+4. busca ou cria veículo;
+5. valida serviços e peças ativos;
+6. calcula orçamento;
+7. cria histórico;
+8. coloca a OS em `AGUARDANDO_APROVACAO`.
+
+### Aprovar OS pelo fluxo administrativo
+
+```http
+PATCH /api/service-orders/1/approve
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "document": "12345678909",
+  "comment": "Orçamento aprovado pelo atendimento."
+}
+```
+
+No fluxo administrativo, o service usa apenas o `comment`; o documento não é validado nesse endpoint.
+
+### Atualizar status da OS
+
+```http
+PATCH /api/service-orders/1/status
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "status": "FINALIZADA",
+  "comment": "Serviço finalizado."
+}
+```
+
+### Consultar OS publicamente
+
+```http
+GET /api/public/service-orders/OS-20260101-12345?document=12345678909
+```
+
+### Aprovar OS publicamente
+
+```http
+POST /api/public/service-orders/OS-20260101-12345/approve
+Content-Type: application/json
+```
+
+```json
+{
+  "document": "12345678909",
+  "comment": "Aprovado pelo cliente."
 }
 ```
 
 ## Fluxo de status da OS
 
+Transições permitidas:
+
 ```txt
-RECEBIDA -> EM_DIAGNOSTICO -> AGUARDANDO_APROVACAO -> EM_EXECUCAO -> FINALIZADA -> ENTREGUE
+RECEBIDA -> EM_DIAGNOSTICO
+RECEBIDA -> AGUARDANDO_APROVACAO
+EM_DIAGNOSTICO -> AGUARDANDO_APROVACAO
+AGUARDANDO_APROVACAO -> EM_EXECUCAO
+EM_EXECUCAO -> FINALIZADA
+FINALIZADA -> ENTREGUE
 ```
 
-Também é permitido criar a OS já com orçamento calculado e status `AGUARDANDO_APROVACAO`.
+A criação da OS envia automaticamente para `AGUARDANDO_APROVACAO`, porque o MVP calcula o orçamento na criação.
 
-## Testes
+Timestamps relevantes:
+
+| Campo         | Quando é preenchido                             |
+|---------------|-------------------------------------------------|
+| `approvedAt`  | Ao aprovar orçamento                            |
+| `startedAt`   | Ao aprovar orçamento ou entrar em `EM_EXECUCAO` |
+| `finalizedAt` | Ao entrar em `FINALIZADA`                       |
+| `deliveredAt` | Ao entrar em `ENTREGUE`                         |
+
+## Banco de dados
+
+O banco é PostgreSQL e o schema é versionado com Flyway.
+
+Migração principal:
+
+```txt
+src/main/resources/db/migration/V1__init.sql
+```
+
+Tabelas criadas:
+
+- `users`
+- `customers`
+- `vehicles`
+- `service_catalog_items`
+- `parts`
+- `service_orders`
+- `work_order_services`
+- `work_order_parts`
+- `service_order_status_history`
+- `flyway_schema_history`, criada/gerenciada pelo Flyway
+
+O desenho MER fica em:
+
+```txt
+docs/MER.drawio
+```
+
+Relações principais:
+
+```txt
+customers 1 --- N vehicles
+customers 1 --- N service_orders
+vehicles  1 --- N service_orders
+service_orders 1 --- N work_order_services
+service_catalog_items 1 --- N work_order_services
+service_orders 1 --- N work_order_parts
+parts 1 --- N work_order_parts
+service_orders 1 --- N service_order_status_history
+```
+
+## Testes e cobertura
+
+Rodar testes:
 
 ```bash
 mvn test
 ```
 
-Com cobertura:
+Rodar testes com cobertura e regra JaCoCo:
 
 ```bash
 mvn verify
 ```
 
-O relatório do JaCoCo fica em:
+Relatório do JaCoCo:
 
 ```txt
 target/site/jacoco/index.html
 ```
 
-## Observação importante
+O `pom.xml` configura cobertura mínima de **80% de linhas** para os pacotes/classes incluídos no plugin JaCoCo.
 
-Projeto foi estruturado para Java 25 e Spring Boot 4.
+O projeto possui testes para:
+
+- domínio de OS;
+- política de status;
+- domínio de peças;
+- serviços de aplicação;
+- autenticação e JWT;
+- validadores de documento e placa;
+- healthcheck com MockMvc;
+- relatório de tempo médio.
+
+## Documentação complementar
+
+Arquivos importantes:
+
+```txt
+README.md
+```
+
+Visão geral do projeto, execução local, Docker, autenticação, endpoints, payloads e testes.
+
+```txt
+docs/architecture.md
+```
+
+Detalhamento da arquitetura, camadas, domínio, segurança, banco, fluxos e pontos de atenção.
+
+```txt
+docs/source-project-mapping.md
+```
+
+Mapeamento da implementação Java/Spring atual.
+
+```txt
+docs/MER.drawio
+```
+
+Modelo entidade-relacionamento visual do banco.
+
+## Pontos de atenção
+
+- O projeto está organizado por camadas técnicas, não por pacotes físicos de domínio.
+- O Hibernate está com `ddl-auto: validate`; alterações de schema devem ser feitas via Flyway.
+- O enum Java `Role` possui `ADMIN`, `DEFAULT` e `MECHANIC`, enquanto o check constraint SQL permite `ADMIN`,`ATTENDANT`
+  e `MECHANIC`. O seed atual usa `ADMIN`, mas esse alinhamento deve ser revisado se novos usuários forem criados com
+  role padrão.
+- O campo `diagnosis` existe em `ServiceOrder` e na tabela `service_orders`, mas ainda não possui endpoint específico de
+  preenchimento.
+- A API carrega roles no JWT, mas atualmente a autorização dos endpoints exige autenticação sem regras granulares por
+  perfil.
+- O código da OS é gerado com data + número aleatório e possui unicidade no banco; ainda não existe retry explícito para
+  colisão.
