@@ -213,15 +213,3 @@ O build Maven configura JaCoCo para executar relatório e checagem na fase `veri
 5. O domínio de OS funciona como o núcleo do MVP, concentrando orçamento, status, histórico e estoque.
 6. O MER em `docs/MER.drawio` corresponde às tabelas declaradas em `V1__init.sql`, incluindo `flyway_schema_history`
    como tabela operacional do Flyway.
-
-## 10. Pontos de atenção para manutenção
-
-- Não criar documentação ou novos imports assumindo pacotes físicos como `br.com.oficina.mvp.auth` ou
-  `br.com.oficina.mvp.serviceorders`; eles não existem hoje.
-- Ao evoluir o projeto, decidir se a organização continuará por camada técnica ou se será migrada para pacotes por
-  domínio.
-- Alinhar o enum `Role.DEFAULT` com o check constraint do banco, que atualmente usa `ATTENDANT`.
-- Caso futuras rotas dependam de perfil, aproveitar as authorities `ROLE_ADMIN`, `ROLE_DEFAULT`/`ROLE_ATTENDANT` e
-  `ROLE_MECHANIC` carregadas pelo JWT.
-- Se o fluxo de diagnóstico ganhar endpoint próprio, reutilizar o campo `diagnosis` já existente em `service_orders` e
-  em `ServiceOrder`.
