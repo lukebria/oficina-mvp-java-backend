@@ -22,7 +22,7 @@ public final class ServiceOrderStatusPolicy {
     public static void assertTransition(ServiceOrderStatus current, ServiceOrderStatus next) {
         var allowed = allowedTransitions(current);
         if (!allowed.contains(next)) {
-            throw new BusinessException("Transição de status inválida: " + current + " -> " + next + ".", HttpStatus.UNPROCESSABLE_ENTITY,
+            throw new BusinessException("Transição de status inválida: " + current + " -> " + next + ".", HttpStatus.UNPROCESSABLE_CONTENT,
                     Map.of("current", current.name(), "next", next.name(), "allowed", allowed));
         }
     }
