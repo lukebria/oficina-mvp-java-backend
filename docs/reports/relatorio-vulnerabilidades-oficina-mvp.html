@@ -1,0 +1,95 @@
+<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>Relatório de Vulnerabilidades - oficina-mvp-backend</title><style>
+body { font-family: Arial, sans-serif; margin: 32px; color: #222; line-height: 1.45; }
+h1 { color: #172b4d; border-bottom: 3px solid #dfe7f3; padding-bottom: 8px; }
+h2 { color: #253858; margin-top: 28px; }
+h3 { color: #344563; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0 24px; }
+th, td { border: 1px solid #d0d7de; padding: 8px; vertical-align: top; }
+th { background: #e8eef7; text-align: left; }
+.badge { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: bold; }
+.alta { background:#ffe3e3; color:#a10000; }
+.media { background:#fff1cc; color:#7a4d00; }
+.baixa { background:#e8f5e9; color:#1b5e20; }
+.note { background:#f6f8fa; border-left: 4px solid #8c9bab; padding: 10px; }
+</style></head><body>
+<h1>Relatório de Análise de Vulnerabilidades</h1>
+<p><strong>Projeto:</strong> oficina-mvp-backend<br><strong>Ferramenta-base:</strong> SpotBugs + Find Security Bugs<br><strong>Data:</strong> 23/06/2026</p>
+<div class='note'><strong>Resumo executivo:</strong> o SpotBugs encontrou 71 avisos, mas isso não significa 71 vulnerabilidades exploráveis. Os pontos priorizados são CSRF desabilitado, geração previsível de código público, Swagger exposto, credenciais/secrets padrão e revisão de autorização por perfil.</div>
+<h2>1. Métricas consolidadas</h2>
+<table><tr><th>Indicador</th><th>Quantidade</th><th>Leitura</th></tr>
+<tr><td>Avisos totais</td><td>71</td><td>Volume bruto do scanner; precisa de triagem.</td></tr>
+<tr><td>Alta prioridade</td><td>1</td><td>Corrigir ou justificar tecnicamente.</td></tr>
+<tr><td>Média prioridade</td><td>34</td><td>Avaliar e priorizar por exposição real.</td></tr>
+<tr><td>Baixa prioridade</td><td>36</td><td>Tratar como hardening/qualidade.</td></tr>
+<tr><td>Categoria SECURITY</td><td>33</td><td>Inclui endpoints Spring e achados reais.</td></tr>
+<tr><td>Categoria MALICIOUS_CODE</td><td>29</td><td>Nome da categoria do SpotBugs; muitos casos são DTOs/coleções mutáveis.</td></tr>
+</table><h2>2. Achados priorizados</h2>
+<h3>H-01 - Proteção CSRF desabilitada <span class='badge alta'>Alta</span></h3>
+<table>
+<tr><th style='width:18%'>Evidência</th><td>SecurityConfig.java:30 - csrf.disable(); SpotBugs: SPRING_CSRF_PROTECTION_DISABLED / CWE-352.</td></tr>
+<tr><th style='width:18%'>Impacto</th><td>Pode permitir requisições indevidas em aplicações web que usem autenticação baseada em cookie/sessão. Em API stateless com Bearer Token, o risco é menor, mas precisa estar documentado e condicionado ao modelo de autenticação.</td></tr>
+<tr><th style='width:18%'>Recomendação</th><td>Manter CSRF desabilitado somente se a API usar exclusivamente Authorization: Bearer e não cookie de sessão. Caso exista uso por navegador com cookies/credenciais, habilitar CSRF. Documentar a decisão técnica no projeto.</td></tr>
+</table>
+<h3>M-01 - Código público de ordem de serviço gerado com aleatoriedade previsível <span class='badge media'>Média</span></h3>
+<table>
+<tr><th style='width:18%'>Evidência</th><td>ServiceOrderApplicationService.java:189 - ThreadLocalRandom usado para gerar sufixo da OS; SpotBugs: PREDICTABLE_RANDOM / CWE-330.</td></tr>
+<tr><th style='width:18%'>Impacto</th><td>Como existem endpoints públicos para consulta/aprovação por código da OS, códigos previsíveis podem facilitar enumeração, principalmente se houver tentativa automatizada ou vazamento parcial de dados.</td></tr>
+<tr><th style='width:18%'>Recomendação</th><td>Trocar ThreadLocalRandom por SecureRandom, UUID/ULID ou token público longo e imprevisível. Aplicar rate limit nos endpoints públicos e registrar tentativas inválidas.</td></tr>
+</table>
+<h3>M-02 - Swagger/OpenAPI liberado sem restrição <span class='badge media'>Média</span></h3>
+<table>
+<tr><th style='width:18%'>Evidência</th><td>SecurityConfig.java:36 permite /swagger-ui.html, /swagger-ui/** e /v3/api-docs/**.</td></tr>
+<tr><th style='width:18%'>Impacto</th><td>Em produção, expõe o mapa da API, modelos e endpoints, facilitando reconhecimento por atacante.</td></tr>
+<tr><th style='width:18%'>Recomendação</th><td>Liberar Swagger apenas em ambiente local/desenvolvimento ou proteger com perfil, autenticação ou regra de rede.</td></tr>
+</table>
+<h3>M-03 - Secrets e credenciais padrão presentes no pacote do projeto <span class='badge media'>Média</span></h3>
+<table>
+<tr><th style='width:18%'>Evidência</th><td>Pacote enviado contém .env; application.yml define fallback de JWT secret e senha seed de administrador.</td></tr>
+<tr><th style='width:18%'>Impacto</th><td>Se esses valores forem versionados ou usados fora de desenvolvimento, há risco de acesso indevido, falsificação de token ou login com credenciais previsíveis.</td></tr>
+<tr><th style='width:18%'>Recomendação</th><td>Remover .env do versionamento/pacote de entrega, manter apenas .env.example sem valores reais, rotacionar JWT secret e eliminar senha padrão Admin@123 em ambientes compartilhados.</td></tr>
+</table>
+<h3>M-04 - Endpoints públicos de ordem de serviço precisam de controles adicionais <span class='badge media'>Média</span></h3>
+<table>
+<tr><th style='width:18%'>Evidência</th><td>SecurityConfig.java libera /api/public/**; PublicServiceOrderController expõe consulta e aprovação pública por código e documento.</td></tr>
+<tr><th style='width:18%'>Impacto</th><td>Mesmo com validação por documento, endpoints públicos podem sofrer enumeração, força bruta ou abuso automatizado.</td></tr>
+<tr><th style='width:18%'>Recomendação</th><td>Adicionar rate limiting, auditoria de tentativas, resposta genérica, expiração de código/token e token público forte para aprovação.</td></tr>
+</table>
+<h3>M-05 - Controle de autorização parece amplo <span class='badge media'>Média</span></h3>
+<table>
+<tr><th style='width:18%'>Evidência</th><td>SecurityConfig.java usa anyRequest().authenticated(); não foram identificadas anotações @PreAuthorize/@Secured no pacote analisado.</td></tr>
+<tr><th style='width:18%'>Impacto</th><td>Usuários autenticados podem ter acesso a operações administrativas caso não exista validação de perfil em outra camada.</td></tr>
+<tr><th style='width:18%'>Recomendação</th><td>Definir matriz de permissões e aplicar hasRole/hasAuthority, @PreAuthorize ou validação centralizada por endpoint/serviço.</td></tr>
+</table>
+<h3>B-01 - Header Authorization é entrada não confiável <span class='badge baixa'>Baixa</span></h3>
+<table>
+<tr><th style='width:18%'>Evidência</th><td>JwtAuthenticationFilter.java:31 - request.getHeader(&quot;Authorization&quot;); SpotBugs: SERVLET_HEADER / CWE-807.</td></tr>
+<tr><th style='width:18%'>Impacto</th><td>O alerta é principalmente educativo: headers podem ser manipulados pelo cliente. No código atual, o header é parseado como JWT, o que é esperado.</td></tr>
+<tr><th style='width:18%'>Recomendação</th><td>Não tomar decisões sensíveis apenas com base no header cru. Continuar validando assinatura, expiração e usuário ativo. Padronizar retorno 401 para token inválido.</td></tr>
+</table>
+<h3>B-02 - Construtor de JwtService pode lançar exceção <span class='badge baixa'>Baixa</span></h3>
+<table>
+<tr><th style='width:18%'>Evidência</th><td>JwtService.java:22 - Keys.hmacShaKeyFor(...); SpotBugs: CT_CONSTRUCTOR_THROW.</td></tr>
+<tr><th style='width:18%'>Impacto</th><td>Se o secret for inválido/curto, a aplicação pode falhar ao inicializar. O risco prático é mais de robustez/configuração do que exploração direta.</td></tr>
+<tr><th style='width:18%'>Recomendação</th><td>Validar o JWT secret em configuração/startup com mensagem clara; evitar fallback inseguro e exigir secret forte por variável de ambiente.</td></tr>
+</table>
+<h2>3. Ruídos prováveis / validação manual</h2><table><tr><th>Tipo</th><th>Qtd.</th><th>Classificação</th><th>Como interpretar</th></tr>
+<tr><td>SPRING_ENDPOINT</td><td>30</td><td>Informativo</td><td>O SpotBugs apenas indica que métodos de controllers são acessíveis remotamente. Não é vulnerabilidade automática; serve para revisar autenticação/autorização.</td></tr>
+<tr><td>EI_EXPOSE_REP / EI_EXPOSE_REP2</td><td>29</td><td>Ruído provável / qualidade</td><td>Muitos achados vêm de records/DTOs e injeção de services em controllers, comuns em Spring. Corrigir coleções mutáveis expostas quando fizer sentido.</td></tr>
+<tr><td>THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION / REC_CATCH_EXCEPTION</td><td>3</td><td>Qualidade</td><td>Refinar tratamento de exceções para evitar captura genérica e mascaramento de erros.</td></tr>
+<tr><td>DM_CONVERT_CASE</td><td>2</td><td>Baixo</td><td>Usar Locale.ROOT em normalizações para evitar comportamento dependente do locale da JVM.</td></tr>
+</table><h2>4. Distribuição por tipo</h2><table><tr><th>Tipo</th><th>Qtd.</th><th>Categoria</th><th>Prioridade</th><th>Observação</th></tr>
+<tr><td>SPRING_ENDPOINT</td><td>30</td><td>SECURITY</td><td>Baixa</td><td>Informativo; revisar autorização e exposição.</td></tr>
+<tr><td>EI_EXPOSE_REP2</td><td>16</td><td>MALICIOUS_CODE</td><td>Média</td><td>Normal em injeção de dependência; provável falso positivo em controllers.</td></tr>
+<tr><td>EI_EXPOSE_REP</td><td>13</td><td>MALICIOUS_CODE</td><td>Média</td><td>Avaliar cópias defensivas em coleções mutáveis.</td></tr>
+<tr><td>BX_UNBOXING_IMMEDIATELY_REBOXED</td><td>2</td><td>PERFORMANCE</td><td>Média</td><td>Hardening/qualidade de código.</td></tr>
+<tr><td>DM_CONVERT_CASE</td><td>2</td><td>I18N</td><td>Baixa</td><td>Hardening/qualidade de código.</td></tr>
+<tr><td>THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION</td><td>2</td><td>BAD_PRACTICE</td><td>Baixa</td><td>Hardening/qualidade de código.</td></tr>
+<tr><td>CT_CONSTRUCTOR_THROW</td><td>1</td><td>BAD_PRACTICE</td><td>Média</td><td>Hardening de inicialização do JWT.</td></tr>
+<tr><td>PREDICTABLE_RANDOM</td><td>1</td><td>SECURITY</td><td>Média</td><td>Trocar por SecureRandom/UUID se usado em fluxo público.</td></tr>
+<tr><td>REC_CATCH_EXCEPTION</td><td>1</td><td>STYLE</td><td>Baixa</td><td>Hardening/qualidade de código.</td></tr>
+<tr><td>SERVLET_HEADER</td><td>1</td><td>SECURITY</td><td>Baixa</td><td>Validar token; não confiar em header cru.</td></tr>
+<tr><td>SPRING_CSRF_PROTECTION_DISABLED</td><td>1</td><td>SECURITY</td><td>Alta</td><td>Corrigir ou justificar conforme modelo de autenticação.</td></tr>
+<tr><td>UWF_UNWRITTEN_FIELD</td><td>1</td><td>CORRECTNESS</td><td>Média</td><td>Hardening/qualidade de código.</td></tr>
+</table><h2>5. Plano de ação</h2><ol><li>Corrigir ou documentar tecnicamente a decisão de CSRF desabilitado.</li><li>Trocar a geração do código público de OS para valor imprevisível e adicionar rate limit nos endpoints públicos.</li><li>Bloquear Swagger/OpenAPI em produção.</li><li>Remover .env do pacote/repositório e substituir senhas/secrets padrão por variáveis seguras.</li><li>Revisar matriz de autorização por perfil e proteger operações administrativas.</li><li>Reexecutar SpotBugs após correções e complementar com Semgrep/Trivy/ZAP quando Docker/Python estiver disponível.</li></ol>
+<h2>6. Observações</h2><p>SpotBugs é análise estática e precisa de triagem manual. Complementar com ZAP, Semgrep, Trivy e análise de dependências quando o ambiente permitir.</p>
+</body></html>
