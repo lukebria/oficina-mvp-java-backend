@@ -136,6 +136,7 @@ de novo em cada seção.
 | `VehicleRepositoryPort`                                              | application.port.out  | Porta de saída (`findByPlate`, `save`, `delete`...)                    |
 | `VehicleService`                                                     | application           | Implementa `VehicleUseCase`; depende de `CustomerUseCase` (módulo `customer`) para achar o dono do veículo |
 | `VehicleController` / `VehicleRequestDto` / `VehicleResponseDto`     | adapter.in.web        | `/api/vehicles` — CRUD de veículos                                      |
+| `VehicleJpaRepository` / `VehiclePersistenceAdapter`                 | adapter.out.persistence | O adapter inicializa (`Hibernate.initialize`) a associação `LAZY` `customer` antes de retornar, já que `VehicleResponseDto` a acessa fora da transação (`open-in-view: false`) |
 
 ### 4.3 `catalog`
 
@@ -181,13 +182,14 @@ Módulo mais complexo: é o único agregado que orquestra os quatro módulos ant
 | `WorkOrderService` / `WorkOrderPart` / `WorkOrderLineItem`                                                                                          | domain                | Itens de serviço/peça da OS com preço congelado; `WorkOrderLineItem` é a superclasse comum (`@MappedSuperclass`) |
 | `ServiceOrderStatusHistory`                                                                                                                         | domain                | Histórico de mudança de status                                          |
 | `ServiceOrderStatusPolicy`                                                                                                                          | domain                | Define transições de status permitidas                                  |
-| `ServiceOrderUseCase` / `CreateServiceOrderCommand`                                                                                                 | application.port.in   | Porta administrativa: listar, criar, aprovar, trocar status              |
+| `ServiceOrderUseCase` / `CreateServiceOrderCommand`                                                                                                 | application.port.in   | Porta administrativa: listar, criar, aprovar, trocar status, preencher diagnóstico |
 | `PublicServiceOrderUseCase`                                                                                                                         | application.port.in   | Porta pública: consulta e aprovação pelo cliente                        |
 | `ServiceOrderRepositoryPort`                                                                                                                        | application.port.out  | Porta de saída (`findByCode`, `save`...)                                 |
 | `ServiceOrderService`                                                                                                                               | application           | Implementa as duas portas de entrada; depende de `CustomerRepositoryPort`, `VehicleRepositoryPort`, `CatalogRepositoryPort` e `PartRepositoryPort` (portas de saída dos outros módulos) para orquestrar a criação da OS |
 | `ServiceOrderController`                                                                                                                            | adapter.in.web        | `/api/service-orders` — fluxo administrativo                             |
 | `PublicServiceOrderController`                                                                                                                      | adapter.in.web        | `/api/public/service-orders` — consulta e aprovação pública              |
-| `CreateServiceOrderRequestDto`, `ServiceOrderResponseDto`, `PublicServiceOrderResponseDto`, `UpdateStatusRequestDto`, `CustomerApprovalRequestDto` | adapter.in.web        | DTOs de request/response do módulo                                       |
+| `CreateServiceOrderRequestDto`, `ServiceOrderResponseDto`, `PublicServiceOrderResponseDto`, `UpdateStatusRequestDto`, `UpdateDiagnosisRequestDto`, `CustomerApprovalRequestDto` | adapter.in.web        | DTOs de request/response do módulo                                       |
+| `ServiceOrderJpaRepository` / `ServiceOrderPersistenceAdapter`                                                                                      | adapter.out.persistence | Além de delegar ao Spring Data, o adapter inicializa (`Hibernate.initialize`) as associações `LAZY` da OS (cliente, veículo, serviços, peças, histórico) antes de retornar, já que `open-in-view` é `false` e o mapeamento para DTO acontece no controller, fora da transação |
 
 ### 4.7 `report`
 
@@ -428,7 +430,21 @@ Timestamps preenchidos no domínio:
 
 Na aprovação, `approvedAt` e `startedAt` são preenchidos juntos.
 
-### 7.6 Relatório de tempo médio
+### 7.6 Preenchimento de diagnóstico
+
+```txt
+PATCH /api/service-orders/{id}/diagnosis
+  -> ServiceOrderController.updateDiagnosis
+  -> ServiceOrderService.updateDiagnosis (implementa ServiceOrderUseCase)
+  -> busca OS
+  -> ServiceOrder.updateDiagnosis
+```
+
+Não há restrição de status para preencher ou atualizar o diagnóstico — pode ser feito em qualquer etapa do fluxo,
+assim como `customerNotes`. O campo é exposto em `ServiceOrderResponseDto` (fluxo administrativo); a visão pública
+(`PublicServiceOrderResponseDto`) não o inclui.
+
+### 7.7 Relatório de tempo médio
 
 ```txt
 GET /api/reports/average-execution-time
@@ -463,8 +479,9 @@ Mapeamentos principais:
 | `BusinessException`               | Status definido pela própria exceção |
 | `MethodArgumentNotValidException` | `400 Bad Request`                    |
 | `ConstraintViolationException`    | `400 Bad Request`                    |
+| `HttpMessageNotReadableException` | `400 Bad Request` (corpo da requisição malformado/ilegível) |
 | `DataIntegrityViolationException` | `409 Conflict`                       |
-| `Exception`                       | `500 Internal Server Error`          |
+| `Exception`                       | `500 Internal Server Error` (logado via `GlobalExceptionHandler`, nível `ERROR`) |
 
 ## 9. Seed inicial
 
@@ -495,7 +512,15 @@ Cobrem:
 - autenticação;
 - JWT;
 - validadores de CPF/CNPJ e placa;
-- healthcheck com MockMvc.
+- healthcheck com MockMvc;
+- serialização ponta a ponta com Spring/H2 reais (`LazyAssociationSerializationIntegrationTest`).
+
+Os testes de serviço de aplicação mockam a porta de saída, então nunca tocam o Hibernate de verdade — não pegam
+`LazyInitializationException` causada por acesso a associação `LAZY` fora da transação (`open-in-view: false`).
+`LazyAssociationSerializationIntegrationTest` existe justamente para isso: sobe o contexto Spring completo com H2 e
+bate nos endpoints REST via MockMvc, sem mocks, então reproduz o mesmo comportamento de sessão do Hibernate que a
+aplicação tem em produção. Ao adicionar um módulo novo com relação `LAZY` exposta em DTO, adicione um caso ali (ou
+numa classe irmã) para o mesmo padrão continuar coberto.
 
 O `pom.xml` configura JaCoCo com relatório na fase `verify` e regra mínima de **90% de cobertura de linha** para os
 pacotes/classes incluídos na configuração do plugin.
@@ -533,12 +558,17 @@ Estes pontos refletem o estado atual do código e podem ser úteis para manuten�
    persistência e modelo de domínio puro. Essa foi uma escolha pragmática para não multiplicar classes de mapeamento;
    se o projeto crescer a ponto de precisar de modelos de leitura/escrita distintos, essa é a primeira fronteira a
    revisar.
-2. O campo `diagnosis` existe na entidade e na tabela `service_orders`, mas atualmente não há endpoint dedicado para
-   preenchê-lo.
-3. O código da OS é gerado com data + número aleatório e possui unicidade no banco. Não há retry explícito caso ocorra
+2. O código da OS é gerado com data + número aleatório e possui unicidade no banco. Não há retry explícito caso ocorra
    colisão de código.
-4. A segurança já carrega role no JWT e no `SecurityContext`, mas os endpoints ainda não usam autorização granular por
+3. A segurança já carrega role no JWT e no `SecurityContext`, mas os endpoints ainda não usam autorização granular por
    perfil.
-5. O módulo `report` não tem `domain` nem `adapter.out.persistence` próprios — ele lê diretamente pela porta de saída
+4. O módulo `report` não tem `domain` nem `adapter.out.persistence` próprios — ele lê diretamente pela porta de saída
    do módulo `serviceorder` (`ServiceOrderRepositoryPort`). É uma exceção deliberada ao esqueleto padrão dos módulos,
    já que `report` é puramente um caso de uso de leitura sobre dados de outro módulo.
+5. `open-in-view` é `false` e o mapeamento DTO acontece no adapter web, fora da transação da camada `application`.
+   Por isso, os adapters de persistência que retornam entidades com associações `LAZY` acessadas pelo DTO
+   (`serviceorder`, `vehicle` — as únicas duas hoje, confirmado por auditoria de todos os `@ManyToOne`/`@OneToMany`
+   do projeto) precisam inicializá-las explicitamente (`Hibernate.initialize`) antes de retornar — ver
+   `ServiceOrderPersistenceAdapter` e `VehiclePersistenceAdapter`. Um módulo novo com relações `LAZY` expostas no
+   response precisa do mesmo cuidado, senão a chamada falha com `LazyInitializationException` (HTTP 500). O teste
+   `LazyAssociationSerializationIntegrationTest` (seção 10) existe para pegar essa regressão automaticamente.

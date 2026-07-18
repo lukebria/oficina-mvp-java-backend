@@ -19,6 +19,7 @@ public record ServiceOrderResponseDto(
         CustomerView customer,
         VehicleView vehicle,
         String customerNotes,
+        String diagnosis,
         BudgetView budget,
         List<OrderServiceView> services,
         List<OrderPartView> parts,
@@ -48,6 +49,7 @@ public record ServiceOrderResponseDto(
                         order.getVehicle().getManufacturingYear()
                 ),
                 order.getCustomerNotes(),
+                order.getDiagnosis(),
                 new BudgetView(
                         order.getTotalServices(),
                         order.getTotalParts(),

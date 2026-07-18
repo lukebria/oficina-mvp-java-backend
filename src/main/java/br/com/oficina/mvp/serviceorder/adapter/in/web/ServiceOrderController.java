@@ -54,4 +54,10 @@ public class ServiceOrderController {
     public ServiceOrderResponseDto updateStatus(@PathVariable Long id, @RequestBody @Valid UpdateStatusRequestDto request) {
         return ServiceOrderResponseDto.from(serviceOrderUseCase.updateStatus(id, request.status(), request.comment()));
     }
+
+    @PatchMapping("/{id}/diagnosis")
+    @Operation(summary = "Preenche ou atualiza o diagnóstico da OS")
+    public ServiceOrderResponseDto updateDiagnosis(@PathVariable Long id, @RequestBody @Valid UpdateDiagnosisRequestDto request) {
+        return ServiceOrderResponseDto.from(serviceOrderUseCase.updateDiagnosis(id, request.diagnosis()));
+    }
 }

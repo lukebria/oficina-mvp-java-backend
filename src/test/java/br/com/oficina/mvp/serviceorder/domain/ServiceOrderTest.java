@@ -112,4 +112,13 @@ class ServiceOrderTest {
 
         assertThat(order.getServices().getFirst().getQuantity()).isEqualTo(1);
     }
+
+    @Test
+    void shouldUpdateDiagnosis() {
+        var order = new ServiceOrder("OS-009", customer, vehicle, null);
+
+        order.updateDiagnosis("Pastilhas de freio desgastadas.");
+
+        assertThat(order.getDiagnosis()).isEqualTo("Pastilhas de freio desgastadas.");
+    }
 }

@@ -15,4 +15,6 @@ public interface ServiceOrderUseCase {
     ServiceOrder approve(Long id, String comment);
 
     ServiceOrder updateStatus(Long id, ServiceOrderStatus status, String comment);
+
+    ServiceOrder updateDiagnosis(Long id, String diagnosis);
 }

@@ -208,6 +208,26 @@ class ServiceOrderServiceTest {
     }
 
     @Test
+    void shouldUpdateDiagnosis() {
+        var order = new ServiceOrder("OS-011", customer, vehicle, null);
+        ReflectionTestUtils.setField(order, "id", 1L);
+        when(serviceOrders.findById(1L)).thenReturn(Optional.of(order));
+
+        var result = service.updateDiagnosis(1L, "Pastilhas de freio desgastadas.");
+
+        assertThat(result.getDiagnosis()).isEqualTo("Pastilhas de freio desgastadas.");
+    }
+
+    @Test
+    void shouldThrowWhenUpdatingDiagnosisForMissingOrder() {
+        when(serviceOrders.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateDiagnosis(99L, "Diagnóstico"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Ordem de serviço não encontrada");
+    }
+
+    @Test
     void shouldFindPublicByCode() {
         var order = orderWaitingApproval();
         when(serviceOrders.findByCode("OS-PUBLIC")).thenReturn(Optional.of(order));

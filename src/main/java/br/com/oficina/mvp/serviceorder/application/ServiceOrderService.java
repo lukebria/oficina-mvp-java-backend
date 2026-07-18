@@ -133,6 +133,14 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
     }
 
     @Override
+    @Transactional
+    public ServiceOrder updateDiagnosis(Long id, String diagnosis) {
+        var order = findEntity(id);
+        order.updateDiagnosis(diagnosis);
+        return order;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public ServiceOrder findByCode(String code, String document) {
         var normalizedDocument = DocumentValidator.normalize(document);

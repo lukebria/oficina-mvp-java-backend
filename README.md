@@ -59,6 +59,7 @@ automático, aprovação pelo cliente, histórico de status e relatório de temp
 - Validação de estoque antes da aprovação.
 - Baixa automática de estoque na aprovação.
 - Controle de transição de status da OS.
+- Preenchimento/atualização do diagnóstico da OS.
 - Histórico de status da OS.
 - Relatório de tempo médio de execução.
 - Healthcheck da aplicação.
@@ -319,6 +320,7 @@ POST  /api/service-orders
 GET   /api/service-orders/{id}
 PATCH /api/service-orders/{id}/approve
 PATCH /api/service-orders/{id}/status
+PATCH /api/service-orders/{id}/diagnosis
 ```
 
 ### Ordens de serviço — fluxo público do cliente
@@ -466,6 +468,20 @@ Authorization: Bearer <token>
 }
 ```
 
+### Preencher diagnóstico da OS
+
+```http
+PATCH /api/service-orders/1/diagnosis
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "diagnosis": "Pastilhas de freio desgastadas, necessária troca."
+}
+```
+
 ### Consultar OS publicamente
 
 ```http
@@ -583,7 +599,9 @@ O projeto possui testes para:
 - autenticação e JWT;
 - validadores de documento e placa;
 - healthcheck com MockMvc;
-- relatório de tempo médio.
+- relatório de tempo médio;
+- serialização ponta a ponta com Spring/H2 reais, sem mocks (`LazyAssociationSerializationIntegrationTest`), para
+  pegar `LazyInitializationException` que os testes de service (mockados) não detectam.
 
 ## Documentação complementar
 
@@ -618,8 +636,10 @@ Modelo entidade-relacionamento visual do banco.
 - O domínio de cada módulo permanece anotado com JPA (`@Entity`) — não há separação entre entidade de persistência e
   modelo de domínio puro; foi uma escolha pragmática para não multiplicar classes de mapeamento.
 - O Hibernate está com `ddl-auto: validate`; alterações de schema devem ser feitas via Flyway.
-- O campo `diagnosis` existe em `ServiceOrder` e na tabela `service_orders`, mas ainda não possui endpoint específico de
-  preenchimento.
+- `open-in-view` está `false` (boa prática); por isso os adapters de persistência (`*PersistenceAdapter`) inicializam
+  explicitamente as associações `LAZY` (`Hibernate.initialize`) antes de a entidade cruzar a porta, já que o
+  mapeamento para DTO acontece no controller, fora da transação. Um novo módulo com relações `LAZY` retornadas para
+  fora da transação precisa do mesmo cuidado.
 - A API carrega roles no JWT, mas atualmente a autorização dos endpoints exige autenticação sem regras granulares por
   perfil.
 - O código da OS é gerado com data + número aleatório e possui unicidade no banco; ainda não existe retry explícito para

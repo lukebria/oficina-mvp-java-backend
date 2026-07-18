@@ -93,6 +93,7 @@ conceito-a-conceito com um backend TS/Node equivalente.
 | `GET /api/service-orders/{id}`                           | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `PATCH /api/service-orders/{id}/approve`                 | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `PATCH /api/service-orders/{id}/status`                  | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
+| `PATCH /api/service-orders/{id}/diagnosis`               | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `GET /api/public/service-orders/{code}?document=...`     | `serviceorder.adapter.in.web.PublicServiceOrderController`    | `serviceorder.application.ServiceOrderService`               | Pública      |
 | `POST /api/public/service-orders/{code}/approve`         | `serviceorder.adapter.in.web.PublicServiceOrderController`    | `serviceorder.application.ServiceOrderService`               | Pública      |
 | `GET /api/reports/average-execution-time`                | `report.adapter.in.web.ReportController`                      | `report.application.ReportService`                           | JWT          |

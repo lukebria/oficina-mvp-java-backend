@@ -111,6 +111,10 @@ public class ServiceOrder extends BaseEntity {
                 comment == null || comment.isBlank() ? "Orçamento aprovado. Execução iniciada." : comment);
     }
 
+    public void updateDiagnosis(String diagnosis) {
+        this.diagnosis = diagnosis;
+    }
+
     public void changeStatus(ServiceOrderStatus nextStatus, String comment) {
         ServiceOrderStatusPolicy.assertTransition(this.status, nextStatus);
         this.status = nextStatus;
