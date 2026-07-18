@@ -608,9 +608,6 @@ Modelo entidade-relacionamento visual do banco.
 
 - O projeto está organizado por camadas técnicas, não por pacotes físicos de domínio.
 - O Hibernate está com `ddl-auto: validate`; alterações de schema devem ser feitas via Flyway.
-- O enum Java `Role` possui `ADMIN`, `DEFAULT` e `MECHANIC`, enquanto o check constraint SQL permite `ADMIN`,`ATTENDANT`
-  e `MECHANIC`. O seed atual usa `ADMIN`, mas esse alinhamento deve ser revisado se novos usuários forem criados com
-  role padrão.
 - O campo `diagnosis` existe em `ServiceOrder` e na tabela `service_orders`, mas ainda não possui endpoint específico de
   preenchimento.
 - A API carrega roles no JWT, mas atualmente a autorização dos endpoints exige autenticação sem regras granulares por

@@ -22,7 +22,7 @@ public class User extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Role role = Role.DEFAULT;
+    private Role role = Role.ATTENDANT;
 
     protected User() {}
 
