@@ -33,7 +33,34 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login", "/api/public/**", "/api/health", "/actuator/health").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/services", "/api/parts").authenticated()
+
+                        .requestMatchers(HttpMethod.GET, "/api/customers", "/api/customers/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
+                        .requestMatchers(HttpMethod.POST, "/api/customers").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
+                        .requestMatchers(HttpMethod.PUT, "/api/customers/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
+                        .requestMatchers(HttpMethod.DELETE, "/api/customers/{id}").hasRole("ADMIN")
+
+                        .requestMatchers(HttpMethod.GET, "/api/vehicles", "/api/vehicles/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
+                        .requestMatchers(HttpMethod.POST, "/api/vehicles").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
+                        .requestMatchers(HttpMethod.PUT, "/api/vehicles/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
+                        .requestMatchers(HttpMethod.DELETE, "/api/vehicles/{id}").hasRole("ADMIN")
+
+                        .requestMatchers(HttpMethod.GET, "/api/services", "/api/services/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
+                        .requestMatchers(HttpMethod.POST, "/api/services").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/services/{id}").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/services/{id}").hasRole("ADMIN")
+
+                        .requestMatchers(HttpMethod.GET, "/api/parts", "/api/parts/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
+                        .requestMatchers(HttpMethod.POST, "/api/parts").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/parts/{id}").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/parts/{id}").hasRole("ADMIN")
+
+                        .requestMatchers(HttpMethod.GET, "/api/service-orders", "/api/service-orders/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
+                        .requestMatchers(HttpMethod.POST, "/api/service-orders").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
+                        .requestMatchers(HttpMethod.PATCH, "/api/service-orders/{id}/approve", "/api/service-orders/{id}/status", "/api/service-orders/{id}/diagnosis")
+                        .hasAnyRole("ADMIN", "MECHANIC")
+
+                        .requestMatchers(HttpMethod.GET, "/api/reports/average-execution-time").hasRole("ADMIN")
+
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

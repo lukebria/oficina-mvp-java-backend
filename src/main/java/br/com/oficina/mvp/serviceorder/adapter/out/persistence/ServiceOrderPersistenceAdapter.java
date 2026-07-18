@@ -32,6 +32,11 @@ class ServiceOrderPersistenceAdapter implements ServiceOrderRepositoryPort {
     }
 
     @Override
+    public boolean existsByCode(String code) {
+        return jpaRepository.existsByCode(code);
+    }
+
+    @Override
     public ServiceOrder save(ServiceOrder order) {
         return initialize(jpaRepository.save(order));
     }

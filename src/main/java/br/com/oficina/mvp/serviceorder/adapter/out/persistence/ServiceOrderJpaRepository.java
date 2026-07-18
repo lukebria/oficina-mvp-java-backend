@@ -7,4 +7,6 @@ import java.util.Optional;
 
 interface ServiceOrderJpaRepository extends JpaRepository<ServiceOrder, Long> {
     Optional<ServiceOrder> findByCode(String code);
+
+    boolean existsByCode(String code);
 }

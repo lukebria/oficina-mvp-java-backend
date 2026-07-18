@@ -184,7 +184,7 @@ Módulo mais complexo: é o único agregado que orquestra os quatro módulos ant
 | `ServiceOrderStatusPolicy`                                                                                                                          | domain                | Define transições de status permitidas                                  |
 | `ServiceOrderUseCase` / `CreateServiceOrderCommand`                                                                                                 | application.port.in   | Porta administrativa: listar, criar, aprovar, trocar status, preencher diagnóstico |
 | `PublicServiceOrderUseCase`                                                                                                                         | application.port.in   | Porta pública: consulta e aprovação pelo cliente                        |
-| `ServiceOrderRepositoryPort`                                                                                                                        | application.port.out  | Porta de saída (`findByCode`, `save`...)                                 |
+| `ServiceOrderRepositoryPort`                                                                                                                        | application.port.out  | Porta de saída (`findByCode`, `existsByCode`, `save`...)                 |
 | `ServiceOrderService`                                                                                                                               | application           | Implementa as duas portas de entrada; depende de `CustomerRepositoryPort`, `VehicleRepositoryPort`, `CatalogRepositoryPort` e `PartRepositoryPort` (portas de saída dos outros módulos) para orquestrar a criação da OS |
 | `ServiceOrderController`                                                                                                                            | adapter.in.web        | `/api/service-orders` — fluxo administrativo                             |
 | `PublicServiceOrderController`                                                                                                                      | adapter.in.web        | `/api/public/service-orders` — consulta e aprovação pública              |
@@ -259,8 +259,46 @@ role    = role do usuário
 email   = email do usuário
 ```
 
-O filtro `JwtAuthenticationFilter` transforma a role em authority `ROLE_<ROLE>`. Atualmente, a configuração exige
-autenticação, mas não aplica regras finas por perfil em endpoints específicos.
+O filtro `JwtAuthenticationFilter` transforma a role em authority `ROLE_<ROLE>`, o que permite usar
+`hasRole`/`hasAnyRole` em `SecurityConfig`.
+
+### Autorização por perfil
+
+Além da autenticação, `SecurityConfig` aplica autorização granular por rota + método HTTP, usando os perfis do enum
+`Role` (`ADMIN`, `MECHANIC`, `ATTENDANT`):
+
+| Rota                                              | Método | Perfis permitidos          |
+|----------------------------------------------------|--------|------------------------------|
+| `/api/customers`, `/api/customers/{id}`             | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers`                                    | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers/{id}`                               | PUT    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers/{id}`                               | DELETE | ADMIN                      |
+| `/api/vehicles`, `/api/vehicles/{id}`               | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles`                                     | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles/{id}`                                | PUT    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles/{id}`                                | DELETE | ADMIN                      |
+| `/api/services`, `/api/services/{id}`               | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/services`                                     | POST   | ADMIN                      |
+| `/api/services/{id}`                                | PUT    | ADMIN                      |
+| `/api/services/{id}`                                | DELETE | ADMIN                      |
+| `/api/parts`, `/api/parts/{id}`                     | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/parts`                                        | POST   | ADMIN                      |
+| `/api/parts/{id}`                                   | PUT    | ADMIN                      |
+| `/api/parts/{id}`                                   | DELETE | ADMIN                      |
+| `/api/service-orders`, `/api/service-orders/{id}`   | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/service-orders`                               | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/service-orders/{id}/approve`                  | PATCH  | ADMIN, MECHANIC            |
+| `/api/service-orders/{id}/status`                   | PATCH  | ADMIN, MECHANIC            |
+| `/api/service-orders/{id}/diagnosis`                | PATCH  | ADMIN, MECHANIC            |
+| `/api/reports/average-execution-time`               | GET    | ADMIN                      |
+
+Rotas fora dessa lista exigem apenas autenticação (`anyRequest().authenticated()`). `GET /api/health` e
+`GET /actuator/health` permanecem em `permitAll()` — exigir role para um probe de liveness/monitoramento quebraria a
+convenção usada por orquestradores de infraestrutura.
+
+Coberto por `AuthorizationIntegrationTest` (`src/test/java/br/com/oficina/mvp/shared/api`), que sobe o contexto
+Spring real (Security incluído, sem mocks) e verifica 403 para perfis não permitidos e sucesso para os permitidos,
+para cada formato de regra da matriz (todos os perfis, só ADMIN, ADMIN+MECHANIC e rota pública).
 
 ### CORS
 
@@ -558,17 +596,21 @@ Estes pontos refletem o estado atual do código e podem ser úteis para manuten�
    persistência e modelo de domínio puro. Essa foi uma escolha pragmática para não multiplicar classes de mapeamento;
    se o projeto crescer a ponto de precisar de modelos de leitura/escrita distintos, essa é a primeira fronteira a
    revisar.
-2. O código da OS é gerado com data + número aleatório e possui unicidade no banco. Não há retry explícito caso ocorra
-   colisão de código.
-3. A segurança já carrega role no JWT e no `SecurityContext`, mas os endpoints ainda não usam autorização granular por
-   perfil.
-4. O módulo `report` não tem `domain` nem `adapter.out.persistence` próprios — ele lê diretamente pela porta de saída
+2. A segurança carrega role no JWT e no `SecurityContext`, e os endpoints usam autorização granular por perfil via
+   `hasRole`/`hasAnyRole` em `SecurityConfig` — matriz completa na seção 5 ("Autorização por perfil"), coberta por
+   `AuthorizationIntegrationTest`.
+3. O módulo `report` não tem `domain` nem `adapter.out.persistence` próprios — ele lê diretamente pela porta de saída
    do módulo `serviceorder` (`ServiceOrderRepositoryPort`). É uma exceção deliberada ao esqueleto padrão dos módulos,
    já que `report` é puramente um caso de uso de leitura sobre dados de outro módulo.
-5. `open-in-view` é `false` e o mapeamento DTO acontece no adapter web, fora da transação da camada `application`.
+4. `open-in-view` é `false` e o mapeamento DTO acontece no adapter web, fora da transação da camada `application`.
    Por isso, os adapters de persistência que retornam entidades com associações `LAZY` acessadas pelo DTO
    (`serviceorder`, `vehicle` — as únicas duas hoje, confirmado por auditoria de todos os `@ManyToOne`/`@OneToMany`
    do projeto) precisam inicializá-las explicitamente (`Hibernate.initialize`) antes de retornar — ver
    `ServiceOrderPersistenceAdapter` e `VehiclePersistenceAdapter`. Um módulo novo com relações `LAZY` expostas no
    response precisa do mesmo cuidado, senão a chamada falha com `LazyInitializationException` (HTTP 500). O teste
    `LazyAssociationSerializationIntegrationTest` (seção 10) existe para pegar essa regressão automaticamente.
+5. Geração do código da OS: `ServiceOrderService.generateUniqueOrderCode()` checa `existsByCode` antes de montar a OS
+   e regenera o código em caso de colisão, até 5 tentativas (`MAX_CODE_GENERATION_ATTEMPTS`); esgotadas as tentativas,
+   lança `BusinessException` (`409 Conflict`). O retry acontece **antes** do `save()`, não depois de uma falha real
+   de constraint — no Postgres, um erro de statement aborta a transação inteira até um rollback, então capturar
+   `DataIntegrityViolationException` e tentar salvar de novo na mesma transação não funcionaria.

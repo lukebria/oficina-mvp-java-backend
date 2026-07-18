@@ -12,5 +12,7 @@ public interface ServiceOrderRepositoryPort {
 
     Optional<ServiceOrder> findByCode(String code);
 
+    boolean existsByCode(String code);
+
     ServiceOrder save(ServiceOrder order);
 }

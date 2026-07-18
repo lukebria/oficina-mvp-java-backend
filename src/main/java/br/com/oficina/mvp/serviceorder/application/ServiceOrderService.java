@@ -30,6 +30,8 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOrderUseCase {
+    private static final int MAX_CODE_GENERATION_ATTEMPTS = 5;
+
     private final ServiceOrderRepositoryPort serviceOrders;
     private final CustomerRepositoryPort customers;
     private final VehicleRepositoryPort vehicles;
@@ -71,7 +73,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
         var customer = resolveCustomer(command.customer(), document);
         var vehicle = resolveVehicle(command.vehicle(), customer, plate);
 
-        var order = new ServiceOrder(generateOrderCode(), customer, vehicle, command.customerNotes());
+        var order = new ServiceOrder(generateUniqueOrderCode(), customer, vehicle, command.customerNotes());
         addRequestedServices(order, command.services());
         addRequestedParts(order, command.parts());
 
@@ -195,6 +197,18 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
         for (var orderPart : order.getParts()) {
             orderPart.getPart().decrementStock(orderPart.getQuantity());
         }
+    }
+
+    // Checa unicidade antes do insert em vez de tentar salvar e reagir a um conflito: no Postgres, uma violação de
+    // constraint aborta a transação inteira, então um save() seguinte na mesma transação falharia de qualquer forma.
+    private String generateUniqueOrderCode() {
+        for (int attempt = 1; attempt <= MAX_CODE_GENERATION_ATTEMPTS; attempt++) {
+            var code = generateOrderCode();
+            if (!serviceOrders.existsByCode(code)) {
+                return code;
+            }
+        }
+        throw new BusinessException("Não foi possível gerar um código único para a OS. Tente novamente.", HttpStatus.CONFLICT);
     }
 
     private String generateOrderCode() {

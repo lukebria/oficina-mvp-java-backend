@@ -264,6 +264,39 @@ Authorization: Bearer <token>
 
 As demais rotas exigem JWT.
 
+### Autorização por perfil
+
+Além de exigir JWT, as rotas abaixo checam o `role` do usuário autenticado (`ADMIN`, `MECHANIC`, `ATTENDANT`),
+aplicado via `hasRole`/`hasAnyRole` em `SecurityConfig`. Fora dessa lista, qualquer usuário autenticado tem acesso.
+
+| Rota                                        | Método | Perfis permitidos         |
+|----------------------------------------------|--------|----------------------------|
+| `/api/customers`, `/api/customers/{id}`       | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers`                              | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers/{id}`                         | PUT    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers/{id}`                         | DELETE | ADMIN                      |
+| `/api/vehicles`, `/api/vehicles/{id}`         | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles`                               | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles/{id}`                          | PUT    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles/{id}`                          | DELETE | ADMIN                      |
+| `/api/services`, `/api/services/{id}`         | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/services`                               | POST   | ADMIN                      |
+| `/api/services/{id}`                          | PUT    | ADMIN                      |
+| `/api/services/{id}`                          | DELETE | ADMIN                      |
+| `/api/parts`, `/api/parts/{id}`               | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/parts`                                  | POST   | ADMIN                      |
+| `/api/parts/{id}`                             | PUT    | ADMIN                      |
+| `/api/parts/{id}`                             | DELETE | ADMIN                      |
+| `/api/service-orders`, `/api/service-orders/{id}` | GET | ADMIN, MECHANIC, ATTENDANT |
+| `/api/service-orders`                         | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/service-orders/{id}/approve`            | PATCH  | ADMIN, MECHANIC            |
+| `/api/service-orders/{id}/status`             | PATCH  | ADMIN, MECHANIC            |
+| `/api/service-orders/{id}/diagnosis`          | PATCH  | ADMIN, MECHANIC            |
+| `/api/reports/average-execution-time`         | GET    | ADMIN                      |
+
+`GET /api/health` e `GET /actuator/health` foram mantidos públicos (sem exigir role) para não quebrar a convenção de
+healthcheck usada por orquestradores/monitoramento — não fazem sentido exigir ADMIN para um probe de liveness.
+
 ## Endpoints principais
 
 ### Auth
@@ -601,7 +634,9 @@ O projeto possui testes para:
 - healthcheck com MockMvc;
 - relatório de tempo médio;
 - serialização ponta a ponta com Spring/H2 reais, sem mocks (`LazyAssociationSerializationIntegrationTest`), para
-  pegar `LazyInitializationException` que os testes de service (mockados) não detectam.
+  pegar `LazyInitializationException` que os testes de service (mockados) não detectam;
+- autorização por perfil ponta a ponta com Spring Security real, sem mocks (`AuthorizationIntegrationTest`),
+  cobrindo os formatos de regra da matriz (todos os perfis, só ADMIN, ADMIN+MECHANIC e rota pública).
 
 ## Documentação complementar
 
@@ -640,7 +675,10 @@ Modelo entidade-relacionamento visual do banco.
   explicitamente as associações `LAZY` (`Hibernate.initialize`) antes de a entidade cruzar a porta, já que o
   mapeamento para DTO acontece no controller, fora da transação. Um novo módulo com relações `LAZY` retornadas para
   fora da transação precisa do mesmo cuidado.
-- A API carrega roles no JWT, mas atualmente a autorização dos endpoints exige autenticação sem regras granulares por
-  perfil.
-- O código da OS é gerado com data + número aleatório e possui unicidade no banco; ainda não existe retry explícito para
-  colisão.
+- A autorização por perfil (`ADMIN`, `MECHANIC`, `ATTENDANT`) é aplicada por rota/método em `SecurityConfig`; veja a
+  tabela em [Autorização por perfil](#autorização-por-perfil). Coberta por `AuthorizationIntegrationTest`
+  (Spring Security real, sem mocks).
+- O código da OS (`OS-<data>-<5 dígitos aleatórios>`) tem unicidade garantida no banco. Antes de inserir, o
+  `ServiceOrderService` checa `existsByCode` e gera um novo código em caso de colisão (até 5 tentativas); no Postgres
+  não dá pra simplesmente capturar a violação de constraint e tentar de novo na mesma transação, porque um erro de
+  banco aborta a transação inteira até um rollback.

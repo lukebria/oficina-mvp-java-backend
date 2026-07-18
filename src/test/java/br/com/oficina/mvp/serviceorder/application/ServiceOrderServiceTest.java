@@ -113,6 +113,30 @@ class ServiceOrderServiceTest {
     }
 
     @Test
+    void shouldRetryCodeGenerationWhenCodeCollides() {
+        when(customers.findByDocument("52998224725")).thenReturn(Optional.of(customer));
+        when(vehicles.findByPlate("ABC1234")).thenReturn(Optional.of(vehicle));
+        when(catalog.findById(1L)).thenReturn(Optional.of(catalogItem));
+        when(serviceOrders.existsByCode(any())).thenReturn(true, true, false);
+        when(serviceOrders.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.create(validCommand("529.982.247-25"));
+
+        assertThat(result.getCode()).startsWith("OS-");
+    }
+
+    @Test
+    void shouldRejectCreationWhenCodeGenerationAttemptsAreExhausted() {
+        when(customers.findByDocument("52998224725")).thenReturn(Optional.of(customer));
+        when(vehicles.findByPlate("ABC1234")).thenReturn(Optional.of(vehicle));
+        when(serviceOrders.existsByCode(any())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.create(validCommand("529.982.247-25")))
+                .isInstanceOfSatisfying(BusinessException.class, ex ->
+                        assertThat(ex.getStatus()).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    @Test
     void shouldCreateOrderWithExistingCustomerAndVehicle() {
         when(customers.findByDocument("52998224725")).thenReturn(Optional.of(customer));
         when(vehicles.findByPlate("ABC1234")).thenReturn(Optional.of(vehicle));
