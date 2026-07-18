@@ -507,12 +507,9 @@ Estes pontos refletem o estado atual do código e podem ser úteis para manuten�
 
 1. O código está organizado por camadas técnicas, não por módulos de domínio. A documentação deve evitar sugerir que
    existem pacotes físicos como `auth/`, `customers/` ou `serviceorders/`.
-2. O enum Java `Role` contém `ADMIN`, `DEFAULT` e `MECHANIC`, enquanto o SQL `users_role_chk` permite `ADMIN`,
-   `ATTENDANT` e `MECHANIC`. Como o seed usa `ADMIN`, o fluxo inicial funciona, mas vale alinhar `DEFAULT` e `ATTENDANT`
-   em uma evolução futura.
-3. O campo `diagnosis` existe na entidade e na tabela `service_orders`, mas atualmente não há endpoint dedicado para
+2. O campo `diagnosis` existe na entidade e na tabela `service_orders`, mas atualmente não há endpoint dedicado para
    preenchê-lo.
-4. O código da OS é gerado com data + número aleatório e possui unicidade no banco. Não há retry explícito caso ocorra
+3. O código da OS é gerado com data + número aleatório e possui unicidade no banco. Não há retry explícito caso ocorra
    colisão de código.
-5. A segurança já carrega role no JWT e no `SecurityContext`, mas os endpoints ainda não usam autorização granular por
+4. A segurança já carrega role no JWT e no `SecurityContext`, mas os endpoints ainda não usam autorização granular por
    perfil.
