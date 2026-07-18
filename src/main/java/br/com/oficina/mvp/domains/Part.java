@@ -1,9 +1,11 @@
 package br.com.oficina.mvp.domains;
 
 import br.com.oficina.mvp.domains.base.BaseEntity;
+import br.com.oficina.mvp.shared.exception.BusinessException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import org.springframework.http.HttpStatus;
 
 import java.math.BigDecimal;
 
@@ -49,6 +51,10 @@ public class Part extends BaseEntity {
     }
 
     public void decrementStock(int quantity) {
+        if (quantity > this.stockQuantity) {
+            throw new BusinessException("Estoque insuficiente para a peça " + name + ".",
+                    HttpStatus.UNPROCESSABLE_CONTENT);
+        }
         this.stockQuantity -= quantity;
     }
 

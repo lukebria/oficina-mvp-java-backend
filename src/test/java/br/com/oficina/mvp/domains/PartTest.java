@@ -1,10 +1,12 @@
 package br.com.oficina.mvp.domains;
 
+import br.com.oficina.mvp.shared.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PartTest {
 
@@ -36,5 +38,15 @@ class PartTest {
         part.decrementStock(3);
 
         assertThat(part.getStockQuantity()).isEqualTo(7);
+    }
+
+    @Test
+    void shouldRejectDecrementWhenStockIsInsufficient() {
+        var part = new Part("Filtro", "FLT-001", new BigDecimal("35.00"), 2, 0, true);
+
+        assertThatThrownBy(() -> part.decrementStock(3))
+                .isInstanceOf(BusinessException.class);
+
+        assertThat(part.getStockQuantity()).isEqualTo(2);
     }
 }
