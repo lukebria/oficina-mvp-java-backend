@@ -1,6 +1,6 @@
 package br.com.oficina.mvp.shared.security;
 
-import br.com.oficina.mvp.infra.UserRepository;
+import br.com.oficina.mvp.auth.application.port.out.UserRepositoryPort;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,9 +18,9 @@ import java.util.List;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
-    private final UserRepository userRepository;
+    private final UserRepositoryPort userRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository) {
+    public JwtAuthenticationFilter(JwtService jwtService, UserRepositoryPort userRepository) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
     }

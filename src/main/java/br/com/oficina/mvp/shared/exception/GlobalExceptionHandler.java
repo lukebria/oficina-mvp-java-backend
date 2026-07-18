@@ -2,9 +2,12 @@ package br.com.oficina.mvp.shared.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,6 +19,8 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiError> handleBusiness(BusinessException ex, HttpServletRequest request) {
         return build(ex.getStatus(), ex.getMessage(), request.getRequestURI(), ex.getDetails());
@@ -27,15 +32,19 @@ public class GlobalExceptionHandler {
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             fields.put(error.getField(), error.getDefaultMessage());
         }
-        return build(HttpStatus.BAD_REQUEST, "Dados inválidos.", request.getRequestURI(), fields);
+        return invalidData(fields, request);
     }
-
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiError> handleConstraintViolation(ConstraintViolationException ex, HttpServletRequest request) {
         Map<String, Object> fields = new LinkedHashMap<>();
         ex.getConstraintViolations().forEach(violation -> fields.put(violation.getPropertyPath().toString(), violation.getMessage()));
-        return build(HttpStatus.BAD_REQUEST, "Dados inválidos.", request.getRequestURI(), fields);
+        return invalidData(fields, request);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> handleUnreadableBody(HttpMessageNotReadableException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "Corpo da requisição inválido ou malformado.", request.getRequestURI(), Map.of());
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -45,7 +54,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneric(Exception ex, HttpServletRequest request) {
+        log.error("Erro interno inesperado em {}", request.getRequestURI(), ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Erro interno inesperado.", request.getRequestURI(), Map.of());
+    }
+
+    private ResponseEntity<ApiError> invalidData(Map<String, Object> fields, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "Dados inválidos.", request.getRequestURI(), fields);
     }
 
     private ResponseEntity<ApiError> build(HttpStatus status, String message, String path, Map<String, Object> details) {

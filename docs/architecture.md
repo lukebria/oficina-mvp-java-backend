@@ -7,51 +7,72 @@ de um MVP: autenticação administrativa, cadastro de clientes, veículos, catá
 criação de ordens de serviço, orçamento automático, aprovação pelo cliente, controle de status e relatório de tempo
 médio de execução.
 
-A arquitetura real do código é um **monolito em camadas**, com uma abordagem pragmática de DDD.
-O projeto não está separado fisicamente em pacotes por domínio, como `customers/`, `vehicles/` ou `serviceorders/`. Em
-vez disso, ele usa pacotes por responsabilidade técnica:
+A arquitetura real do código é um **monolito modular organizado por módulos de negócio**, seguindo os princípios de
+**Arquitetura Hexagonal (Ports & Adapters)**. Cada módulo (`customer`, `vehicle`, `catalog`, `part`, `auth`,
+`serviceorder`, `report`) é um pacote físico próprio com três camadas internas:
 
 ```txt
 src/main/java/br/com/oficina/mvp/
   OficinaMvpApplication.java
-  controllers/       entrada HTTP e endpoints REST
-  domains/           entidades JPA e regras de domínio
-  domains/base/      entidade base com id e timestamps
-  dtos/              contratos de entrada e saída da API
-  dtos/enums/        enums usados por domínio e DTOs
-  infra/             repositórios Spring Data JPA
-  services/          casos de uso e orquestração de aplicação
-  shared/config/     CORS, Security, JWT properties, OpenAPI e seed
-  shared/exception/  exceções e tratamento global de erro
-  shared/security/   filtro JWT e serviço de geração/validação de token
-  shared/validation/ validadores reutilizáveis de CPF/CNPJ e placa
+  <modulo>/
+    domain/                     entidade JPA e regras de domínio do módulo
+    application/                caso de uso (implementa as portas de entrada)
+    application/port/in/        portas de entrada — interface de caso de uso + Command/Result
+    application/port/out/       portas de saída — o que o módulo precisa de fora (ex: repositório)
+    adapter/in/web/             adaptador de entrada — controller REST + DTOs de request/response
+    adapter/out/persistence/    adaptador de saída — repositório Spring Data (package-private) + adapter da porta
+  shared/
+    domain/     vocabulário compartilhado entre módulos (BaseEntity, enums Role e ServiceOrderStatus)
+    config/     CORS, Security, JWT properties, OpenAPI e seed
+    exception/  exceções e tratamento global de erro
+    security/   filtro JWT e serviço de geração/validação de token
+    validation/ validadores reutilizáveis de CPF/CNPJ e placa
+    api/        endpoints técnicos que não pertencem a um módulo de negócio (healthcheck)
 ```
 
-Essa organização favorece simplicidade e velocidade de desenvolvimento, que combinam com o objetivo de MVP. Caso o
-projeto cresça, uma evolução natural seria separar os pacotes por contexto de negócio, por exemplo `auth`, `customers`,
-`vehicles`, `catalog`, `parts`, `serviceorders` e `reports`, cada um com suas próprias camadas internas.
+Módulos existentes hoje: `customer`, `vehicle`, `catalog` (entidade `ServiceCatalogItem`), `part`, `auth` (entidade
+`User`), `serviceorder` (o agregado de OS, incluindo `WorkOrderService`, `WorkOrderPart`, `ServiceOrderStatusHistory`
+e `ServiceOrderStatusPolicy`) e `report`.
+
+Regras de dependência entre camadas:
+
+- **Domain** não depende de `application` nem de `adapter`. Continua anotado com JPA (`@Entity`) — pureza total de
+  domínio (sem framework) foi conscientemente deixada de fora do escopo, para não multiplicar o número de classes com
+  mapeamento manual entre entidade JPA e modelo de domínio.
+- **Application** depende apenas de `domain` e das *portas* (`port.in`, `port.out`) — nunca de um `adapter` diretamente,
+  nem do `adapter` de outro módulo.
+- **Adapter** depende de `application` (via porta) e do próprio `domain`. Os adaptadores `in.web` fazem a conversão
+  DTO ↔ Command/domínio; os adaptadores `out.persistence` implementam a porta de saída delegando para uma interface
+  Spring Data `JpaRepository` package-private (não exposta fora do pacote de persistência).
+- Quando um módulo precisa de outro (ex: `serviceorder` precisa buscar `Customer`, `Vehicle`, `ServiceCatalogItem` e
+  `Part`), ele depende da **porta** do módulo alheio (`CustomerRepositoryPort`, `VehicleUseCase` etc.), nunca da
+  implementação concreta ou do repositório Spring Data do outro módulo. Isso é o que garante que trocar a persistência
+  de um módulo não obriga a mudar nada nos módulos que dependem dele.
+- `Role` e `ServiceOrderStatus` (enums) e `BaseEntity` (superclasse JPA com `id`/`createdAt`/`updatedAt`) são
+  vocabulário/infraestrutura genuinamente compartilhados entre módulos e ficam em `shared.domain`, não dentro de um
+  módulo específico.
 
 ## 2. Stack técnica
 
 A stack está definida principalmente no `pom.xml`, nos arquivos `.yml`, no `Dockerfile` e no `docker-compose.yml`.
 
-| Item                   | Tecnologia/versão             | Onde aparece                                                    |
-|------------------------|-------------------------------|-----------------------------------------------------------------|
-| Linguagem              | Java 25                       | `pom.xml`, `Dockerfile`                                         |
-| Framework              | Spring Boot 4.0.6             | `pom.xml`                                                       |
-| Build                  | Maven                         | `pom.xml`, `Dockerfile`                                         |
-| API HTTP               | Spring WebMVC                 | `spring-boot-starter-webmvc`                                    |
-| Persistência           | Spring Data JPA + Hibernate   | `spring-boot-starter-data-jpa`, entidades em `domains/`         |
-| Banco principal        | PostgreSQL                    | `application.yml`, `docker-compose.yml`, `V1__init.sql`         |
-| Migração               | Flyway                        | `spring-boot-starter-flyway`, `src/main/resources/db/migration` |
-| Segurança              | Spring Security + JWT Bearer  | `SecurityConfig`, `JwtAuthenticationFilter`, `JwtService`       |
-| JWT                    | JJWT 0.12.6                   | `pom.xml`, `JwtService`                                         |
-| Validação              | Jakarta Bean Validation       | DTOs em `dtos/`                                                 |
-| Documentação API       | SpringDoc OpenAPI 3.0.3       | `OpenApiConfig`, `/swagger-ui.html`                             |
-| Observabilidade básica | Spring Actuator               | `application.yml`, `/actuator/health`                           |
-| Testes                 | JUnit 5, Mockito, MockMvc, H2 | `src/test/java`, `application-test.yml`                         |
-| Cobertura              | JaCoCo 0.8.13                 | `pom.xml`                                                       |
-| Container              | Docker multi-stage            | `Dockerfile`                                                    |
+| Item                   | Tecnologia/versão             | Onde aparece                                                     |
+|------------------------|--------------------------------|-------------------------------------------------------------------|
+| Linguagem              | Java 25                       | `pom.xml`, `Dockerfile`                                          |
+| Framework              | Spring Boot 4.0.6             | `pom.xml`                                                        |
+| Build                  | Maven                         | `pom.xml`, `Dockerfile`                                          |
+| API HTTP               | Spring WebMVC                 | `spring-boot-starter-webmvc`                                     |
+| Persistência           | Spring Data JPA + Hibernate   | `spring-boot-starter-data-jpa`, entidades em `<modulo>/domain/`  |
+| Banco principal        | PostgreSQL                    | `application.yml`, `docker-compose.yml`, `V1__init.sql`          |
+| Migração               | Flyway                        | `spring-boot-starter-flyway`, `src/main/resources/db/migration`  |
+| Segurança              | Spring Security + JWT Bearer  | `SecurityConfig`, `JwtAuthenticationFilter`, `JwtService`        |
+| JWT                    | JJWT 0.12.6                   | `pom.xml`, `JwtService`                                          |
+| Validação              | Jakarta Bean Validation       | DTOs em `<modulo>/adapter/in/web/`                               |
+| Documentação API       | SpringDoc OpenAPI 3.0.3       | `OpenApiConfig`, `/swagger-ui.html`                               |
+| Observabilidade básica | Spring Actuator               | `application.yml`, `/actuator/health`                             |
+| Testes                 | JUnit 5, Mockito, MockMvc, H2 | `src/test/java`, `application-test.yml`                          |
+| Cobertura              | JaCoCo 0.8.13                 | `pom.xml`                                                        |
+| Container              | Docker multi-stage            | `Dockerfile`                                                     |
 
 ## 3. Configuração de execução
 
@@ -88,121 +109,121 @@ spring:
 No ambiente de testes, o projeto usa H2 em memória com modo PostgreSQL e `ddl-auto: create-drop`; o Flyway fica
 desabilitado em `src/test/resources/application-test.yml`.
 
-## 4. Camadas e responsabilidades
+## 4. Módulos e responsabilidades
 
-### 4.1 Controllers
+Cada módulo segue o mesmo esqueleto: `domain` → `application` (implementa `port.in`, depende de `port.out`) →
+`adapter.in.web` (controller + DTOs) e `adapter.out.persistence` (repositório Spring Data + adapter da porta).
+As tabelas abaixo listam só as classes com nome/responsabilidade específicos de cada módulo — a "receita" do adapter
+de persistência (`XJpaRepository` + `XPersistenceAdapter`, ambos package-private) se repete em todos e não é listada
+de novo em cada seção.
 
-Pacote: `br.com.oficina.mvp.controllers`
+### 4.1 `customer`
 
-Responsável por expor os endpoints REST e delegar os casos de uso para os serviços.
+| Classe                                                             | Camada               | Responsabilidade                                                     |
+|----------------------------------------------------------------------|-----------------------|--------------------------------------------------------------------------|
+| `Customer`                                                            | domain                | Entidade JPA (`customers`), documento normalizado                       |
+| `CustomerUseCase` / `CustomerCommand`                                 | application.port.in   | Porta de entrada e comando de create/update                             |
+| `CustomerRepositoryPort`                                              | application.port.out  | Porta de saída (`findByDocument`, `save`, `delete`...)                  |
+| `CustomerService`                                                     | application           | Implementa `CustomerUseCase`; valida CPF/CNPJ                           |
+| `CustomerController` / `CustomerRequestDto` / `CustomerResponseDto`   | adapter.in.web        | `/api/customers` — CRUD de clientes                                     |
 
-| Controller                     | Base path                    | Responsabilidade                                |
-|--------------------------------|------------------------------|-------------------------------------------------|
-| `AuthController`               | `/api/auth`                  | Login administrativo e emissão de JWT           |
-| `CustomerController`           | `/api/customers`             | CRUD de clientes                                |
-| `VehicleController`            | `/api/vehicles`              | CRUD de veículos                                |
-| `CatalogController`            | `/api/services`              | CRUD do catálogo de serviços                    |
-| `PartController`               | `/api/parts`                 | CRUD de peças/insumos                           |
-| `ServiceOrderController`       | `/api/service-orders`        | Fluxo administrativo de OS                      |
-| `PublicServiceOrderController` | `/api/public/service-orders` | Consulta e aprovação pública de OS pelo cliente |
-| `ReportController`             | `/api/reports`               | Relatórios operacionais                         |
-| `HealthController`             | `/api/health`                | Healthcheck simples da API                      |
+### 4.2 `vehicle`
 
-### 4.2 Services
+| Classe                                                           | Camada               | Responsabilidade                                                       |
+|---------------------------------------------------------------------|-----------------------|------------------------------------------------------------------------|
+| `Vehicle`                                                            | domain                | Entidade JPA (`vehicles`), vinculada a `Customer`, placa normalizada    |
+| `VehicleUseCase` / `VehicleCommand`                                  | application.port.in   | Porta de entrada e comando de create/update                            |
+| `VehicleRepositoryPort`                                              | application.port.out  | Porta de saída (`findByPlate`, `save`, `delete`...)                    |
+| `VehicleService`                                                     | application           | Implementa `VehicleUseCase`; depende de `CustomerUseCase` (módulo `customer`) para achar o dono do veículo |
+| `VehicleController` / `VehicleRequestDto` / `VehicleResponseDto`     | adapter.in.web        | `/api/vehicles` — CRUD de veículos                                      |
+| `VehicleJpaRepository` / `VehiclePersistenceAdapter`                 | adapter.out.persistence | O adapter inicializa (`Hibernate.initialize`) a associação `LAZY` `customer` antes de retornar, já que `VehicleResponseDto` a acessa fora da transação (`open-in-view: false`) |
 
-Pacote: `br.com.oficina.mvp.services`
+### 4.3 `catalog`
 
-Responsável por orquestrar regras de aplicação, transações, validações de negócio e integração entre repositórios.
+| Classe                                                                                  | Camada               | Responsabilidade                                          |
+|-----------------------------------------------------------------------------------------|-----------------------|-------------------------------------------------------------|
+| `ServiceCatalogItem`                                                                     | domain                | Entidade JPA (`service_catalog_items`)                      |
+| `CatalogUseCase` / `CatalogCommand`                                                      | application.port.in   | Porta de entrada e comando de create/update                 |
+| `CatalogRepositoryPort`                                                                  | application.port.out  | Porta de saída (inclui `count()`, usado pelo `DataSeeder`)   |
+| `CatalogService`                                                                         | application           | Implementa `CatalogUseCase`                                 |
+| `CatalogController` / `ServiceCatalogItemRequestDto` / `ServiceCatalogItemResponseDto`   | adapter.in.web        | `/api/services` — CRUD do catálogo                           |
 
-| Service                          | Responsabilidade principal                                                                           |
-|----------------------------------|------------------------------------------------------------------------------------------------------|
-| `AuthService`                    | Valida credenciais com `PasswordEncoder` e retorna JWT via `JwtService`                              |
-| `CustomerService`                | CRUD de cliente, normalização e validação de CPF/CNPJ                                                |
-| `VehicleService`                 | CRUD de veículo, normalização e validação de placa brasileira                                        |
-| `CatalogService`                 | CRUD de itens do catálogo de serviços                                                                |
-| `PartService`                    | CRUD de peças/insumos e controle dos dados de estoque                                                |
-| `ServiceOrderApplicationService` | Criação de OS, orçamento automático, aprovação, baixa de estoque, consulta pública e troca de status |
-| `ReportService`                  | Cálculo do tempo médio entre início e finalização das OS                                             |
+### 4.4 `part`
 
-### 4.3 Domains
+| Classe                                                       | Camada               | Responsabilidade                                                       |
+|-----------------------------------------------------------------|-----------------------|------------------------------------------------------------------------|
+| `Part`                                                           | domain                | Entidade JPA (`parts`); `decrementStock` valida estoque insuficiente   |
+| `PartUseCase` / `PartCommand`                                    | application.port.in   | Porta de entrada e comando de create/update                            |
+| `PartRepositoryPort`                                             | application.port.out  | Porta de saída (inclui `count()`, usado pelo `DataSeeder`)              |
+| `PartService`                                                    | application           | Implementa `PartUseCase`                                               |
+| `PartController` / `PartRequestDto` / `PartResponseDto`          | adapter.in.web        | `/api/parts` — CRUD de peças/insumos                                    |
 
-Pacote: `br.com.oficina.mvp.domains`
+### 4.5 `auth`
 
-Responsável pelas entidades centrais, mapeamento JPA e regras de domínio próximas dos dados.
+| Classe                                                    | Camada               | Responsabilidade                                                          |
+|----------------------------------------------------------|-----------------------|-------------------------------------------------------------------------------|
+| `User`                                                    | domain                | Entidade JPA (`users`)                                                       |
+| `AuthUseCase` / `LoginCommand` / `AuthResult`             | application.port.in   | Porta de entrada; `AuthResult` carrega token + usuário autenticado           |
+| `UserRepositoryPort`                                      | application.port.out  | Porta de saída (`findByEmail`, `existsByEmail`, `findById`, `save`)          |
+| `AuthService`                                              | application           | Valida credenciais com `PasswordEncoder` e gera JWT via `JwtService` (`shared.security`) |
+| `AuthController` / `LoginRequestDto` / `AuthResponseDto`  | adapter.in.web        | `/api/auth/login` — login administrativo                                     |
 
-| Entidade/classe             | Tabela/uso                     | Regra relevante                                                                       |
-|-----------------------------|--------------------------------|---------------------------------------------------------------------------------------|
-| `User`                      | `users`                        | Representa usuário administrativo autenticável                                        |
-| `Customer`                  | `customers`                    | Dados do cliente e documento normalizado                                              |
-| `Vehicle`                   | `vehicles`                     | Veículo vinculado a cliente e placa normalizada                                       |
-| `ServiceCatalogItem`        | `service_catalog_items`        | Serviço vendável com preço base e tempo estimado                                      |
-| `Part`                      | `parts`                        | Peça/insumo com preço, estoque, estoque mínimo e flag ativo                           |
-| `ServiceOrder`              | `service_orders`               | Agregado principal do fluxo de OS; calcula totais, registra histórico e altera status |
-| `WorkOrderService`          | `work_order_services`          | Item de serviço da OS com preço congelado no momento da criação                       |
-| `WorkOrderPart`             | `work_order_parts`             | Item de peça da OS com preço congelado no momento da criação                          |
-| `ServiceOrderStatusHistory` | `service_order_status_history` | Registro histórico de mudança/status da OS                                            |
-| `ServiceOrderStatusPolicy`  | classe de domínio              | Define transições de status permitidas                                                |
-| `BaseEntity`                | superclass                     | Centraliza `id`, `createdAt` e `updatedAt`                                            |
+`shared.security.JwtAuthenticationFilter` também depende de `UserRepositoryPort` (não do adapter concreto) para
+resolver o usuário autenticado a cada requisição — um exemplo de componente `shared` consumindo a porta de um
+módulo de negócio.
 
-### 4.4 DTOs
+### 4.6 `serviceorder`
 
-Pacote: `br.com.oficina.mvp.dtos`
+Módulo mais complexo: é o único agregado que orquestra os quatro módulos anteriores.
 
-Os DTOs são implementados como `record`, deixando claros os contratos de entrada e saída da API. Eles usam Bean
-Validation, por exemplo `@NotBlank`, `@NotNull`, `@Size`, `@Email`, `@Positive`, `@Min`, `@Max` e `@DecimalMin`.
+| Classe                                                                                                                                              | Camada               | Responsabilidade                                                        |
+|--------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------|-------------------------------------------------------------------------|
+| `ServiceOrder`                                                                                                                                      | domain                | Agregado principal; calcula totais, registra histórico e altera status  |
+| `WorkOrderService` / `WorkOrderPart` / `WorkOrderLineItem`                                                                                          | domain                | Itens de serviço/peça da OS com preço congelado; `WorkOrderLineItem` é a superclasse comum (`@MappedSuperclass`) |
+| `ServiceOrderStatusHistory`                                                                                                                         | domain                | Histórico de mudança de status                                          |
+| `ServiceOrderStatusPolicy`                                                                                                                          | domain                | Define transições de status permitidas                                  |
+| `ServiceOrderUseCase` / `CreateServiceOrderCommand`                                                                                                 | application.port.in   | Porta administrativa: listar, criar, aprovar, trocar status, preencher diagnóstico |
+| `PublicServiceOrderUseCase`                                                                                                                         | application.port.in   | Porta pública: consulta e aprovação pelo cliente                        |
+| `ServiceOrderRepositoryPort`                                                                                                                        | application.port.out  | Porta de saída (`findByCode`, `existsByCode`, `save`...)                 |
+| `ServiceOrderService`                                                                                                                               | application           | Implementa as duas portas de entrada; depende de `CustomerRepositoryPort`, `VehicleRepositoryPort`, `CatalogRepositoryPort` e `PartRepositoryPort` (portas de saída dos outros módulos) para orquestrar a criação da OS |
+| `ServiceOrderController`                                                                                                                            | adapter.in.web        | `/api/service-orders` — fluxo administrativo                             |
+| `PublicServiceOrderController`                                                                                                                      | adapter.in.web        | `/api/public/service-orders` — consulta e aprovação pública              |
+| `CreateServiceOrderRequestDto`, `ServiceOrderResponseDto`, `PublicServiceOrderResponseDto`, `UpdateStatusRequestDto`, `UpdateDiagnosisRequestDto`, `CustomerApprovalRequestDto` | adapter.in.web        | DTOs de request/response do módulo                                       |
+| `ServiceOrderJpaRepository` / `ServiceOrderPersistenceAdapter`                                                                                      | adapter.out.persistence | Além de delegar ao Spring Data, o adapter inicializa (`Hibernate.initialize`) as associações `LAZY` da OS (cliente, veículo, serviços, peças, histórico) antes de retornar, já que `open-in-view` é `false` e o mapeamento para DTO acontece no controller, fora da transação |
 
-Principais contratos:
+### 4.7 `report`
 
-| DTO                                                              | Uso                                                  |
-|------------------------------------------------------------------|------------------------------------------------------|
-| `LoginRequestDto`                                                | Entrada do login                                     |
-| `AuthResponseDto`                                                | Saída do login com token e dados do usuário          |
-| `CustomerRequestDto` / `CustomerResponseDto`                     | CRUD de clientes                                     |
-| `VehicleRequestDto` / `VehicleResponseDto`                       | CRUD de veículos                                     |
-| `ServiceCatalogItemRequestDto` / `ServiceCatalogItemResponseDto` | CRUD do catálogo                                     |
-| `PartRequestDto` / `PartResponseDto`                             | CRUD de peças/insumos                                |
-| `CreateServiceOrderRequestDto`                                   | Criação de OS com cliente, veículo, serviços e peças |
-| `ServiceOrderResponseDto`                                        | Detalhamento administrativo da OS                    |
-| `PublicServiceOrderResponseDto`                                  | Visão pública da OS para o cliente                   |
-| `CustomerApprovalRequestDto`                                     | Aprovação pública ou administrativa do orçamento     |
-| `UpdateStatusRequestDto`                                         | Troca de status da OS                                |
-| `AverageExecutionTimeResponseDto`                                | Resposta do relatório de tempo médio                 |
+Módulo só de leitura — não tem `domain` nem `adapter.out.persistence` próprios; lê os dados através da porta de
+saída do módulo `serviceorder`.
 
-### 4.5 Infra
+| Classe                                                    | Camada               | Responsabilidade                                                              |
+|------------------------------------------------------------|-----------------------|----------------------------------------------------------------------------------|
+| `ReportUseCase` / `AverageExecutionTimeResult`              | application.port.in   | Porta de entrada e resultado do cálculo                                          |
+| `ReportService`                                             | application           | Implementa `ReportUseCase`; depende de `ServiceOrderRepositoryPort` (módulo `serviceorder`) |
+| `ReportController` / `AverageExecutionTimeResponseDto`      | adapter.in.web        | `/api/reports/average-execution-time`                                            |
 
-Pacote: `br.com.oficina.mvp.infra`
+### 4.8 `shared`
 
-Contém repositórios Spring Data JPA:
+Pacote: `br.com.oficina.mvp.shared` — recursos transversais que não pertencem a um módulo de negócio específico:
 
-| Repository                     | Entidade             | Métodos adicionais             |
-|--------------------------------|----------------------|--------------------------------|
-| `UserRepository`               | `User`               | `findByEmail`, `existsByEmail` |
-| `CustomerRepository`           | `Customer`           | `findByDocument`               |
-| `VehicleRepository`            | `Vehicle`            | `findByPlate`                  |
-| `ServiceCatalogItemRepository` | `ServiceCatalogItem` | apenas `JpaRepository`         |
-| `PartRepository`               | `Part`               | apenas `JpaRepository`         |
-| `ServiceOrderRepository`       | `ServiceOrder`       | `findByCode`                   |
-
-### 4.6 Shared
-
-Pacote: `br.com.oficina.mvp.shared`
-
-Concentra recursos transversais:
-
-| Classe                    | Responsabilidade                                                               |
-|---------------------------|--------------------------------------------------------------------------------|
-| `SecurityConfig`          | Configuração de segurança, CORS, sessão stateless, rotas públicas e filtro JWT |
-| `JwtAuthenticationFilter` | Lê `Authorization: Bearer`, valida token e preenche o `SecurityContext`        |
-| `JwtService`              | Gera e faz parse do JWT                                                        |
-| `JwtProperties`           | Propriedades `app.jwt.*`                                                       |
-| `AppCorsProperties`       | Propriedade `app.cors.allowed-origins`                                         |
-| `OpenApiConfig`           | Metadados do Swagger/OpenAPI e security scheme Bearer                          |
-| `DataSeeder`              | Seed inicial de admin, serviços e peças fora do profile `test`                 |
-| `DocumentValidator`       | Normalização e validação de CPF/CNPJ                                           |
-| `PlateValidator`          | Normalização e validação de placa antiga e Mercosul                            |
-| `BusinessException`       | Exceção de negócio com status HTTP e detalhes opcionais                        |
-| `GlobalExceptionHandler`  | Padronização de erros HTTP                                                     |
-| `ApiError`                | Contrato de erro retornado pela API                                            |
+| Classe/pacote                      | Responsabilidade                                                                 |
+|--------------------------------------|------------------------------------------------------------------------------------|
+| `shared.domain.BaseEntity`           | Superclasse JPA com `id`, `createdAt`, `updatedAt`, usada por todas as entidades   |
+| `shared.domain.Role`                 | Enum de papel do usuário (`ADMIN`, `ATTENDANT`, `MECHANIC`)                        |
+| `shared.domain.ServiceOrderStatus`   | Enum de status da OS, usado pelo módulo `serviceorder` e por quem consulta o status |
+| `SecurityConfig`                     | Configuração de segurança, CORS, sessão stateless, rotas públicas e filtro JWT      |
+| `JwtAuthenticationFilter`            | Lê `Authorization: Bearer`, valida token e preenche o `SecurityContext`             |
+| `JwtService`                         | Gera e faz parse do JWT                                                             |
+| `JwtProperties`                      | Propriedades `app.jwt.*`                                                            |
+| `AppCorsProperties`                  | Propriedade `app.cors.allowed-origins`                                              |
+| `OpenApiConfig`                      | Metadados do Swagger/OpenAPI e security scheme Bearer                               |
+| `DataSeeder`                         | Seed inicial de admin, serviços e peças fora do profile `test`                      |
+| `DocumentValidator`                  | Normalização e validação de CPF/CNPJ                                                |
+| `PlateValidator`                     | Normalização e validação de placa antiga e Mercosul                                 |
+| `BusinessException`                  | Exceção de negócio com status HTTP e detalhes opcionais                             |
+| `GlobalExceptionHandler`             | Padronização de erros HTTP                                                          |
+| `ApiError`                           | Contrato de erro retornado pela API                                                 |
+| `shared.api.HealthController`        | `/api/health` — healthcheck simples da API                                          |
 
 ## 5. Segurança
 
@@ -238,8 +259,46 @@ role    = role do usuário
 email   = email do usuário
 ```
 
-O filtro `JwtAuthenticationFilter` transforma a role em authority `ROLE_<ROLE>`. Atualmente, a configuração exige
-autenticação, mas não aplica regras finas por perfil em endpoints específicos.
+O filtro `JwtAuthenticationFilter` transforma a role em authority `ROLE_<ROLE>`, o que permite usar
+`hasRole`/`hasAnyRole` em `SecurityConfig`.
+
+### Autorização por perfil
+
+Além da autenticação, `SecurityConfig` aplica autorização granular por rota + método HTTP, usando os perfis do enum
+`Role` (`ADMIN`, `MECHANIC`, `ATTENDANT`):
+
+| Rota                                              | Método | Perfis permitidos          |
+|----------------------------------------------------|--------|------------------------------|
+| `/api/customers`, `/api/customers/{id}`             | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers`                                    | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers/{id}`                               | PUT    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers/{id}`                               | DELETE | ADMIN                      |
+| `/api/vehicles`, `/api/vehicles/{id}`               | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles`                                     | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles/{id}`                                | PUT    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles/{id}`                                | DELETE | ADMIN                      |
+| `/api/services`, `/api/services/{id}`               | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/services`                                     | POST   | ADMIN                      |
+| `/api/services/{id}`                                | PUT    | ADMIN                      |
+| `/api/services/{id}`                                | DELETE | ADMIN                      |
+| `/api/parts`, `/api/parts/{id}`                     | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/parts`                                        | POST   | ADMIN                      |
+| `/api/parts/{id}`                                   | PUT    | ADMIN                      |
+| `/api/parts/{id}`                                   | DELETE | ADMIN                      |
+| `/api/service-orders`, `/api/service-orders/{id}`   | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/service-orders`                               | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/service-orders/{id}/approve`                  | PATCH  | ADMIN, MECHANIC            |
+| `/api/service-orders/{id}/status`                   | PATCH  | ADMIN, MECHANIC            |
+| `/api/service-orders/{id}/diagnosis`                | PATCH  | ADMIN, MECHANIC            |
+| `/api/reports/average-execution-time`               | GET    | ADMIN                      |
+
+Rotas fora dessa lista exigem apenas autenticação (`anyRequest().authenticated()`). `GET /api/health` e
+`GET /actuator/health` permanecem em `permitAll()` — exigir role para um probe de liveness/monitoramento quebraria a
+convenção usada por orquestradores de infraestrutura.
+
+Coberto por `AuthorizationIntegrationTest` (`src/test/java/br/com/oficina/mvp/shared/api`), que sobe o contexto
+Spring real (Security incluído, sem mocks) e verifica 403 para perfis não permitidos e sucesso para os permitidos,
+para cada formato de regra da matriz (todos os perfis, só ADMIN, ADMIN+MECHANIC e rota pública).
 
 ### CORS
 
@@ -263,7 +322,7 @@ em `docs/MER.drawio`.
 ### Tabelas principais
 
 | Tabela                         | Finalidade                                 |
-|--------------------------------|--------------------------------------------|
+|---------------------------------|---------------------------------------------|
 | `users`                        | Usuários administrativos para autenticação |
 | `customers`                    | Clientes da oficina                        |
 | `vehicles`                     | Veículos vinculados a clientes             |
@@ -306,31 +365,31 @@ O SQL inicial define:
 
 ```txt
 POST /api/auth/login
-  -> AuthController
-  -> AuthService
-  -> UserRepository.findByEmail
+  -> AuthController (auth.adapter.in.web)
+  -> AuthService.login (auth.application, implementa AuthUseCase)
+  -> UserRepositoryPort.findByEmail
   -> PasswordEncoder.matches
   -> JwtService.generate
-  -> AuthResponseDto(token, user)
+  -> AuthResponseDto.from(AuthResult)
 ```
 
 ### 7.2 Criação de ordem de serviço
 
 ```txt
 POST /api/service-orders
-  -> ServiceOrderController.create
-  -> ServiceOrderApplicationService.create
+  -> ServiceOrderController.create (serviceorder.adapter.in.web)
+  -> ServiceOrderService.create (serviceorder.application, implementa ServiceOrderUseCase)
   -> normaliza e valida CPF/CNPJ
   -> normaliza e valida placa
-  -> busca ou cria cliente por documento
-  -> busca ou cria veículo por placa
+  -> busca ou cria cliente por documento (via CustomerRepositoryPort)
+  -> busca ou cria veículo por placa (via VehicleRepositoryPort)
   -> cria ServiceOrder com status RECEBIDA
-  -> adiciona serviços ativos do catálogo
-  -> adiciona peças ativas, quando informadas
+  -> adiciona serviços ativos do catálogo (via CatalogRepositoryPort)
+  -> adiciona peças ativas, quando informadas (via PartRepositoryPort)
   -> calcula total de serviços, peças e total geral
   -> altera status para AGUARDANDO_APROVACAO
   -> registra histórico inicial e histórico de orçamento enviado
-  -> persiste OS, itens e histórico por cascade
+  -> persiste OS, itens e histórico por cascade (via ServiceOrderRepositoryPort)
 ```
 
 Observação: os preços de serviços e peças são copiados para `WorkOrderService` e `WorkOrderPart` no momento da criação.
@@ -354,7 +413,8 @@ Consulta pública:
 
 ```txt
 GET /api/public/service-orders/{code}?document=<cpf-ou-cnpj>
-  -> busca OS pelo code
+  -> PublicServiceOrderController.status
+  -> ServiceOrderService.findByCode (implementa PublicServiceOrderUseCase)
   -> normaliza document
   -> confere se o documento pertence ao cliente da OS
   -> retorna visão pública da OS
@@ -364,6 +424,8 @@ Aprovação pública:
 
 ```txt
 POST /api/public/service-orders/{code}/approve
+  -> PublicServiceOrderController.approve
+  -> ServiceOrderService.approveByCustomer
   -> normaliza document
   -> valida se o documento pertence ao cliente
   -> exige status AGUARDANDO_APROVACAO
@@ -399,20 +461,34 @@ ENTREGUE -> sem próximas transições
 Timestamps preenchidos no domínio:
 
 | Status        | Campo preenchido                    |
-|---------------|-------------------------------------|
+|---------------|---------------------------------------|
 | `EM_EXECUCAO` | `startedAt`, se ainda estiver vazio |
 | `FINALIZADA`  | `finalizedAt`                       |
 | `ENTREGUE`    | `deliveredAt`                       |
 
 Na aprovação, `approvedAt` e `startedAt` são preenchidos juntos.
 
-### 7.6 Relatório de tempo médio
+### 7.6 Preenchimento de diagnóstico
+
+```txt
+PATCH /api/service-orders/{id}/diagnosis
+  -> ServiceOrderController.updateDiagnosis
+  -> ServiceOrderService.updateDiagnosis (implementa ServiceOrderUseCase)
+  -> busca OS
+  -> ServiceOrder.updateDiagnosis
+```
+
+Não há restrição de status para preencher ou atualizar o diagnóstico — pode ser feito em qualquer etapa do fluxo,
+assim como `customerNotes`. O campo é exposto em `ServiceOrderResponseDto` (fluxo administrativo); a visão pública
+(`PublicServiceOrderResponseDto`) não o inclui.
+
+### 7.7 Relatório de tempo médio
 
 ```txt
 GET /api/reports/average-execution-time
-  -> ReportController
-  -> ReportService
-  -> busca todas as OS
+  -> ReportController (report.adapter.in.web)
+  -> ReportService.averageExecutionTime (report.application, implementa ReportUseCase)
+  -> busca todas as OS via ServiceOrderRepositoryPort (módulo serviceorder)
   -> filtra OS com startedAt e finalizedAt preenchidos
   -> calcula média em minutos e horas
 ```
@@ -437,12 +513,13 @@ O `GlobalExceptionHandler` centraliza as respostas de erro no formato `ApiError`
 Mapeamentos principais:
 
 | Exceção                           | HTTP                                 |
-|-----------------------------------|--------------------------------------|
+|------------------------------------|----------------------------------------|
 | `BusinessException`               | Status definido pela própria exceção |
 | `MethodArgumentNotValidException` | `400 Bad Request`                    |
 | `ConstraintViolationException`    | `400 Bad Request`                    |
+| `HttpMessageNotReadableException` | `400 Bad Request` (corpo da requisição malformado/ilegível) |
 | `DataIntegrityViolationException` | `409 Conflict`                       |
-| `Exception`                       | `500 Internal Server Error`          |
+| `Exception`                       | `500 Internal Server Error` (logado via `GlobalExceptionHandler`, nível `ERROR`) |
 
 ## 9. Seed inicial
 
@@ -463,15 +540,25 @@ SEED_ADMIN_PASSWORD=Admin@123
 
 ## 10. Testes e qualidade
 
-O projeto possui testes unitários e de integração em `src/test/java`, cobrindo:
+O projeto possui testes unitários e de integração em `src/test/java`, espelhando o pacote da classe testada
+(ex: `serviceorder.application.ServiceOrderServiceTest` testa `serviceorder.application.ServiceOrderService`).
+Cobrem:
 
 - entidades de domínio;
 - política de transição de status;
-- serviços de aplicação;
+- serviços de aplicação (mockando as portas de saída, inclusive as de outros módulos);
 - autenticação;
 - JWT;
 - validadores de CPF/CNPJ e placa;
-- healthcheck com MockMvc.
+- healthcheck com MockMvc;
+- serialização ponta a ponta com Spring/H2 reais (`LazyAssociationSerializationIntegrationTest`).
+
+Os testes de serviço de aplicação mockam a porta de saída, então nunca tocam o Hibernate de verdade — não pegam
+`LazyInitializationException` causada por acesso a associação `LAZY` fora da transação (`open-in-view: false`).
+`LazyAssociationSerializationIntegrationTest` existe justamente para isso: sobe o contexto Spring completo com H2 e
+bate nos endpoints REST via MockMvc, sem mocks, então reproduz o mesmo comportamento de sessão do Hibernate que a
+aplicação tem em produção. Ao adicionar um módulo novo com relação `LAZY` exposta em DTO, adicione um caso ali (ou
+numa classe irmã) para o mesmo padrão continuar coberto.
 
 O `pom.xml` configura JaCoCo com relatório na fase `verify` e regra mínima de **90% de cobertura de linha** para os
 pacotes/classes incluídos na configuração do plugin.
@@ -505,11 +592,25 @@ O `docker-compose.yml` sobe:
 
 Estes pontos refletem o estado atual do código e podem ser úteis para manutenção futura:
 
-1. O código está organizado por camadas técnicas, não por módulos de domínio. A documentação deve evitar sugerir que
-   existem pacotes físicos como `auth/`, `customers/` ou `serviceorders/`.
-2. O campo `diagnosis` existe na entidade e na tabela `service_orders`, mas atualmente não há endpoint dedicado para
-   preenchê-lo.
-3. O código da OS é gerado com data + número aleatório e possui unicidade no banco. Não há retry explícito caso ocorra
-   colisão de código.
-4. A segurança já carrega role no JWT e no `SecurityContext`, mas os endpoints ainda não usam autorização granular por
-   perfil.
+1. O domínio permanece anotado com JPA (`@Entity`) dentro de cada módulo — não há separação entre entidade de
+   persistência e modelo de domínio puro. Essa foi uma escolha pragmática para não multiplicar classes de mapeamento;
+   se o projeto crescer a ponto de precisar de modelos de leitura/escrita distintos, essa é a primeira fronteira a
+   revisar.
+2. A segurança carrega role no JWT e no `SecurityContext`, e os endpoints usam autorização granular por perfil via
+   `hasRole`/`hasAnyRole` em `SecurityConfig` — matriz completa na seção 5 ("Autorização por perfil"), coberta por
+   `AuthorizationIntegrationTest`.
+3. O módulo `report` não tem `domain` nem `adapter.out.persistence` próprios — ele lê diretamente pela porta de saída
+   do módulo `serviceorder` (`ServiceOrderRepositoryPort`). É uma exceção deliberada ao esqueleto padrão dos módulos,
+   já que `report` é puramente um caso de uso de leitura sobre dados de outro módulo.
+4. `open-in-view` é `false` e o mapeamento DTO acontece no adapter web, fora da transação da camada `application`.
+   Por isso, os adapters de persistência que retornam entidades com associações `LAZY` acessadas pelo DTO
+   (`serviceorder`, `vehicle` — as únicas duas hoje, confirmado por auditoria de todos os `@ManyToOne`/`@OneToMany`
+   do projeto) precisam inicializá-las explicitamente (`Hibernate.initialize`) antes de retornar — ver
+   `ServiceOrderPersistenceAdapter` e `VehiclePersistenceAdapter`. Um módulo novo com relações `LAZY` expostas no
+   response precisa do mesmo cuidado, senão a chamada falha com `LazyInitializationException` (HTTP 500). O teste
+   `LazyAssociationSerializationIntegrationTest` (seção 10) existe para pegar essa regressão automaticamente.
+5. Geração do código da OS: `ServiceOrderService.generateUniqueOrderCode()` checa `existsByCode` antes de montar a OS
+   e regenera o código em caso de colisão, até 5 tentativas (`MAX_CODE_GENERATION_ATTEMPTS`); esgotadas as tentativas,
+   lança `BusinessException` (`409 Conflict`). O retry acontece **antes** do `save()`, não depois de uma falha real
+   de constraint — no Postgres, um erro de statement aborta a transação inteira até um rollback, então capturar
+   `DataIntegrityViolationException` e tentar salvar de novo na mesma transação não funcionaria.

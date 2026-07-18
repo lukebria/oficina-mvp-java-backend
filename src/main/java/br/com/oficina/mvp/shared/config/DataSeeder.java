@@ -1,12 +1,12 @@
 package br.com.oficina.mvp.shared.config;
 
-import br.com.oficina.mvp.dtos.enums.Role;
-import br.com.oficina.mvp.domains.User;
-import br.com.oficina.mvp.infra.UserRepository;
-import br.com.oficina.mvp.domains.ServiceCatalogItem;
-import br.com.oficina.mvp.infra.ServiceCatalogItemRepository;
-import br.com.oficina.mvp.domains.Part;
-import br.com.oficina.mvp.infra.PartRepository;
+import br.com.oficina.mvp.auth.application.port.out.UserRepositoryPort;
+import br.com.oficina.mvp.auth.domain.User;
+import br.com.oficina.mvp.catalog.application.port.out.CatalogRepositoryPort;
+import br.com.oficina.mvp.catalog.domain.ServiceCatalogItem;
+import br.com.oficina.mvp.shared.domain.Role;
+import br.com.oficina.mvp.part.application.port.out.PartRepositoryPort;
+import br.com.oficina.mvp.part.domain.Part;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
@@ -21,9 +21,9 @@ public class DataSeeder {
     @Bean
     @Profile("!test")
     CommandLineRunner seedInitialData(
-            UserRepository users,
-            ServiceCatalogItemRepository services,
-            PartRepository parts,
+            UserRepositoryPort users,
+            CatalogRepositoryPort services,
+            PartRepositoryPort parts,
             PasswordEncoder passwordEncoder,
             @Value("${app.seed.admin-email}") String adminEmail,
             @Value("${app.seed.admin-password}") String adminPassword

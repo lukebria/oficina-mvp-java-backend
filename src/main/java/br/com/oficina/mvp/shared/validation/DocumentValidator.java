@@ -1,5 +1,8 @@
 package br.com.oficina.mvp.shared.validation;
 
+import br.com.oficina.mvp.shared.exception.BusinessException;
+import org.springframework.http.HttpStatus;
+
 public final class DocumentValidator {
     private DocumentValidator() {}
 
@@ -9,6 +12,14 @@ public final class DocumentValidator {
 
     public static String normalize(String value) {
         return onlyDigits(value);
+    }
+
+    public static String requireValid(String rawDocument) {
+        var document = normalize(rawDocument);
+        if (!isValidCpfOrCnpj(document)) {
+            throw new BusinessException("CPF/CNPJ inválido.", HttpStatus.BAD_REQUEST);
+        }
+        return document;
     }
 
     public static boolean isValidCpfOrCnpj(String document) {

@@ -1,0 +1,22 @@
+package br.com.oficina.mvp.catalog.adapter.in.web;
+
+import br.com.oficina.mvp.catalog.application.port.in.CatalogCommand;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
+
+import java.math.BigDecimal;
+
+public record ServiceCatalogItemRequestDto(
+        @NotBlank @Size(min = 2) String name,
+        String description,
+        @NotNull @DecimalMin(value = "0.00") BigDecimal basePrice,
+        @NotNull @Positive Integer estimatedMinutes,
+        Boolean active
+) {
+    public CatalogCommand toCommand() {
+        return new CatalogCommand(name(), description(), basePrice(), estimatedMinutes(), active());
+    }
+}

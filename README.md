@@ -59,6 +59,7 @@ automático, aprovação pelo cliente, histórico de status e relatório de temp
 - Validação de estoque antes da aprovação.
 - Baixa automática de estoque na aprovação.
 - Controle de transição de status da OS.
+- Preenchimento/atualização do diagnóstico da OS.
 - Histórico de status da OS.
 - Relatório de tempo médio de execução.
 - Healthcheck da aplicação.
@@ -67,29 +68,38 @@ automático, aprovação pelo cliente, histórico de status e relatório de temp
 
 ## Arquitetura do projeto
 
-O projeto é um **monolito em camadas** com DDD pragmático. Ele não está separado fisicamente por módulos de domínio; a
-estrutura atual usa pacotes por responsabilidade técnica:
+O projeto é um **monolito modular organizado por módulos de negócio**, seguindo os princípios de **Arquitetura
+Hexagonal (Ports & Adapters)**. Cada módulo (`customer`, `vehicle`, `catalog`, `part`, `auth`, `serviceorder`,
+`report`) é um pacote físico próprio com o mesmo esqueleto interno:
 
 ```txt
 src/main/java/br/com/oficina/mvp/
   OficinaMvpApplication.java
-  controllers/       endpoints REST
-  domains/           entidades JPA e regras de domínio
-  domains/base/      entidade base com id, createdAt e updatedAt
-  dtos/              records de request/response
-  dtos/enums/        enums da aplicação
-  infra/             repositórios Spring Data JPA
-  services/          casos de uso e orquestração
-  shared/config/     segurança, CORS, OpenAPI, seed e properties
-  shared/exception/  exceções e handler global
-  shared/security/   filtro e serviço JWT
-  shared/validation/ validadores de CPF/CNPJ e placa
+  <modulo>/
+    domain/                     entidade JPA e regras de domínio do módulo
+    application/                caso de uso (implementa as portas de entrada)
+    application/port/in/        portas de entrada — interface de caso de uso + Command/Result
+    application/port/out/       portas de saída — o que o módulo precisa de fora (ex: repositório)
+    adapter/in/web/             controller REST + DTOs de request/response
+    adapter/out/persistence/    repositório Spring Data (package-private) + adapter da porta
+  shared/
+    domain/     vocabulário compartilhado entre módulos (BaseEntity, enums Role e ServiceOrderStatus)
+    config/     segurança, CORS, OpenAPI, seed e properties
+    exception/  exceções e handler global
+    security/   filtro e serviço JWT
+    validation/ validadores de CPF/CNPJ e placa
+    api/        endpoints técnicos que não pertencem a um módulo de negócio (healthcheck)
 ```
+
+Quando um módulo precisa de outro (por exemplo `serviceorder` buscando `Customer`, `Vehicle`, `ServiceCatalogItem` e
+`Part`), ele depende sempre da **porta** do módulo alheio (`CustomerRepositoryPort`, `VehicleUseCase` etc.), nunca da
+implementação concreta ou do repositório JPA do outro módulo. Detalhamento completo, camada por camada e módulo por
+módulo, está em [`docs/architecture.md`](docs/architecture.md).
 
 As principais regras de negócio ficam em:
 
-- `ServiceOrderApplicationService`: criação, aprovação, validação de estoque, baixa de estoque, consulta pública e
-  status de OS;
+- `ServiceOrderService` (módulo `serviceorder`): criação, aprovação, validação de estoque, baixa de estoque, consulta
+  pública e status de OS;
 - `ServiceOrder`: cálculo de totais, histórico e timestamps de status;
 - `ServiceOrderStatusPolicy`: transições permitidas de status;
 - `DocumentValidator`: validação de CPF/CNPJ;
@@ -254,6 +264,39 @@ Authorization: Bearer <token>
 
 As demais rotas exigem JWT.
 
+### Autorização por perfil
+
+Além de exigir JWT, as rotas abaixo checam o `role` do usuário autenticado (`ADMIN`, `MECHANIC`, `ATTENDANT`),
+aplicado via `hasRole`/`hasAnyRole` em `SecurityConfig`. Fora dessa lista, qualquer usuário autenticado tem acesso.
+
+| Rota                                        | Método | Perfis permitidos         |
+|----------------------------------------------|--------|----------------------------|
+| `/api/customers`, `/api/customers/{id}`       | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers`                              | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers/{id}`                         | PUT    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/customers/{id}`                         | DELETE | ADMIN                      |
+| `/api/vehicles`, `/api/vehicles/{id}`         | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles`                               | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles/{id}`                          | PUT    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/vehicles/{id}`                          | DELETE | ADMIN                      |
+| `/api/services`, `/api/services/{id}`         | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/services`                               | POST   | ADMIN                      |
+| `/api/services/{id}`                          | PUT    | ADMIN                      |
+| `/api/services/{id}`                          | DELETE | ADMIN                      |
+| `/api/parts`, `/api/parts/{id}`               | GET    | ADMIN, MECHANIC, ATTENDANT |
+| `/api/parts`                                  | POST   | ADMIN                      |
+| `/api/parts/{id}`                             | PUT    | ADMIN                      |
+| `/api/parts/{id}`                             | DELETE | ADMIN                      |
+| `/api/service-orders`, `/api/service-orders/{id}` | GET | ADMIN, MECHANIC, ATTENDANT |
+| `/api/service-orders`                         | POST   | ADMIN, MECHANIC, ATTENDANT |
+| `/api/service-orders/{id}/approve`            | PATCH  | ADMIN, MECHANIC            |
+| `/api/service-orders/{id}/status`             | PATCH  | ADMIN, MECHANIC            |
+| `/api/service-orders/{id}/diagnosis`          | PATCH  | ADMIN, MECHANIC            |
+| `/api/reports/average-execution-time`         | GET    | ADMIN                      |
+
+`GET /api/health` e `GET /actuator/health` foram mantidos públicos (sem exigir role) para não quebrar a convenção de
+healthcheck usada por orquestradores/monitoramento — não fazem sentido exigir ADMIN para um probe de liveness.
+
 ## Endpoints principais
 
 ### Auth
@@ -310,6 +353,7 @@ POST  /api/service-orders
 GET   /api/service-orders/{id}
 PATCH /api/service-orders/{id}/approve
 PATCH /api/service-orders/{id}/status
+PATCH /api/service-orders/{id}/diagnosis
 ```
 
 ### Ordens de serviço — fluxo público do cliente
@@ -457,6 +501,20 @@ Authorization: Bearer <token>
 }
 ```
 
+### Preencher diagnóstico da OS
+
+```http
+PATCH /api/service-orders/1/diagnosis
+Content-Type: application/json
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "diagnosis": "Pastilhas de freio desgastadas, necessária troca."
+}
+```
+
 ### Consultar OS publicamente
 
 ```http
@@ -574,7 +632,11 @@ O projeto possui testes para:
 - autenticação e JWT;
 - validadores de documento e placa;
 - healthcheck com MockMvc;
-- relatório de tempo médio.
+- relatório de tempo médio;
+- serialização ponta a ponta com Spring/H2 reais, sem mocks (`LazyAssociationSerializationIntegrationTest`), para
+  pegar `LazyInitializationException` que os testes de service (mockados) não detectam;
+- autorização por perfil ponta a ponta com Spring Security real, sem mocks (`AuthorizationIntegrationTest`),
+  cobrindo os formatos de regra da matriz (todos os perfis, só ADMIN, ADMIN+MECHANIC e rota pública).
 
 ## Documentação complementar
 
@@ -606,11 +668,17 @@ Modelo entidade-relacionamento visual do banco.
 
 ## Pontos de atenção
 
-- O projeto está organizado por camadas técnicas, não por pacotes físicos de domínio.
+- O domínio de cada módulo permanece anotado com JPA (`@Entity`) — não há separação entre entidade de persistência e
+  modelo de domínio puro; foi uma escolha pragmática para não multiplicar classes de mapeamento.
 - O Hibernate está com `ddl-auto: validate`; alterações de schema devem ser feitas via Flyway.
-- O campo `diagnosis` existe em `ServiceOrder` e na tabela `service_orders`, mas ainda não possui endpoint específico de
-  preenchimento.
-- A API carrega roles no JWT, mas atualmente a autorização dos endpoints exige autenticação sem regras granulares por
-  perfil.
-- O código da OS é gerado com data + número aleatório e possui unicidade no banco; ainda não existe retry explícito para
-  colisão.
+- `open-in-view` está `false` (boa prática); por isso os adapters de persistência (`*PersistenceAdapter`) inicializam
+  explicitamente as associações `LAZY` (`Hibernate.initialize`) antes de a entidade cruzar a porta, já que o
+  mapeamento para DTO acontece no controller, fora da transação. Um novo módulo com relações `LAZY` retornadas para
+  fora da transação precisa do mesmo cuidado.
+- A autorização por perfil (`ADMIN`, `MECHANIC`, `ATTENDANT`) é aplicada por rota/método em `SecurityConfig`; veja a
+  tabela em [Autorização por perfil](#autorização-por-perfil). Coberta por `AuthorizationIntegrationTest`
+  (Spring Security real, sem mocks).
+- O código da OS (`OS-<data>-<5 dígitos aleatórios>`) tem unicidade garantida no banco. Antes de inserir, o
+  `ServiceOrderService` checa `existsByCode` e gera um novo código em caso de colisão (até 5 tentativas); no Postgres
+  não dá pra simplesmente capturar a violação de constraint e tentar de novo na mesma transação, porque um erro de
+  banco aborta a transação inteira até um rollback.
