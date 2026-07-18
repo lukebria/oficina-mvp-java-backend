@@ -24,14 +24,14 @@ import static org.mockito.Mockito.when;
 class PartServiceTest {
 
     @Mock
-    PartRepository repository;
+    PartRepository parts;
 
     @InjectMocks
     PartService service;
 
     @Test
     void shouldListParts() {
-        when(repository.findAll()).thenReturn(List.of(
+        when(parts.findAll()).thenReturn(List.of(
                 new Part("Filtro", "flt-001", new BigDecimal("35.00"), 10, 2, true)
         ));
 
@@ -42,7 +42,7 @@ class PartServiceTest {
     @Test
     void shouldCreatePart() {
         var request = new PartRequestDto("Filtro", "flt-001", new BigDecimal("35.00"), 10, 2, true);
-        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(parts.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var result = service.create(request);
 
@@ -53,7 +53,7 @@ class PartServiceTest {
     @Test
     void shouldUpdatePart() {
         var part = new Part("Filtro", "FLT-001", new BigDecimal("35.00"), 10, 2, true);
-        when(repository.findById(1L)).thenReturn(Optional.of(part));
+        when(parts.findById(1L)).thenReturn(Optional.of(part));
 
         var request = new PartRequestDto("Filtro Premium", "FLT-002", new BigDecimal("45.00"), 5, 1, false);
         var result = service.update(1L, request);
@@ -65,14 +65,14 @@ class PartServiceTest {
     @Test
     void shouldFindById() {
         var part = new Part("Filtro", "FLT-001", new BigDecimal("35.00"), 10, 2, true);
-        when(repository.findById(1L)).thenReturn(Optional.of(part));
+        when(parts.findById(1L)).thenReturn(Optional.of(part));
 
         assertThat(service.findById(1L).name()).isEqualTo("Filtro");
     }
 
     @Test
     void shouldThrowWhenNotFound() {
-        when(repository.findById(99L)).thenReturn(Optional.empty());
+        when(parts.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findById(99L))
                 .isInstanceOf(BusinessException.class)
@@ -82,10 +82,10 @@ class PartServiceTest {
     @Test
     void shouldDeletePart() {
         var part = new Part("Filtro", "FLT-001", new BigDecimal("35.00"), 10, 2, true);
-        when(repository.findById(1L)).thenReturn(Optional.of(part));
+        when(parts.findById(1L)).thenReturn(Optional.of(part));
 
         service.delete(1L);
 
-        verify(repository).delete(part);
+        verify(parts).delete(part);
     }
 }

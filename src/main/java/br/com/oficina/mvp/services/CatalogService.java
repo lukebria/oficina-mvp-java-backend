@@ -14,13 +14,13 @@ import java.util.stream.Collectors;
 
 @Service
 public class CatalogService {
-    private final ServiceCatalogItemRepository repository;
+    private final ServiceCatalogItemRepository catalog;
 
-    public CatalogService(ServiceCatalogItemRepository repository) { this.repository = repository; }
+    public CatalogService(ServiceCatalogItemRepository catalog) { this.catalog = catalog; }
 
     @Transactional(readOnly = true)
     public List<ServiceCatalogItemResponseDto> list() {
-        return repository.findAll()
+        return catalog.findAll()
                 .stream()
                 .map(ServiceCatalogItemResponseDto::from)
                 .collect(Collectors.toList());
@@ -31,7 +31,7 @@ public class CatalogService {
 
     @Transactional
     public ServiceCatalogItemResponseDto create(ServiceCatalogItemRequestDto request) {
-        return ServiceCatalogItemResponseDto.from(repository.save(new ServiceCatalogItem(
+        return ServiceCatalogItemResponseDto.from(catalog.save(new ServiceCatalogItem(
                 request.name(), request.description(), request.basePrice(), request.estimatedMinutes(), request.active()
         )));
     }
@@ -44,10 +44,10 @@ public class CatalogService {
     }
 
     @Transactional
-    public void delete(Long id) { repository.delete(findEntity(id)); }
+    public void delete(Long id) { catalog.delete(findEntity(id)); }
 
     public ServiceCatalogItem findEntity(Long id) {
-        return repository.findById(id)
+        return catalog.findById(id)
                 .orElseThrow(() -> new BusinessException("Serviço não encontrado.", HttpStatus.NOT_FOUND));
     }
 }

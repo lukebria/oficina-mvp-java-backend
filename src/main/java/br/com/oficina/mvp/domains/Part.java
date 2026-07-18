@@ -31,7 +31,7 @@ public class Part extends BaseEntity {
     private Boolean active = true;
 
     protected Part() {}
-    
+
     public Part(String name, String sku, BigDecimal unitPrice, Integer stockQuantity, Integer minStock, Boolean active) {
         this.name = name;
         this.sku = normalizeSku(sku);

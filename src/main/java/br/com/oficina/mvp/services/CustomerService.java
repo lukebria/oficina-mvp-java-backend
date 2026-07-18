@@ -36,16 +36,14 @@ public class CustomerService {
 
     @Transactional
     public CustomerResponseDto create(CustomerRequestDto request) {
-        var document = DocumentValidator.normalize(request.document());
-        validateDocument(document);
+        var document = DocumentValidator.requireValid(request.document());
         return CustomerResponseDto.from(customers.save(new Customer(request.name(), document, request.email(), request.phone())));
     }
 
     @Transactional
     public CustomerResponseDto update(Long id, CustomerRequestDto request) {
         var customer = findEntity(id);
-        var document = DocumentValidator.normalize(request.document());
-        validateDocument(document);
+        var document = DocumentValidator.requireValid(request.document());
         customer.update(request.name(), document, request.email(), request.phone());
         return CustomerResponseDto.from(customer);
     }
@@ -58,11 +56,5 @@ public class CustomerService {
     public Customer findEntity(Long id) {
         return customers.findById(id)
                 .orElseThrow(() -> new BusinessException("Cliente não encontrado.", HttpStatus.NOT_FOUND));
-    }
-
-    private void validateDocument(String document) {
-        if (!DocumentValidator.isValidCpfOrCnpj(document)) {
-            throw new BusinessException("CPF/CNPJ inválido.", HttpStatus.BAD_REQUEST);
-        }
     }
 }

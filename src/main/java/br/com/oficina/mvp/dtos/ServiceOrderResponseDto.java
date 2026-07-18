@@ -7,6 +7,7 @@ import br.com.oficina.mvp.domains.WorkOrderPart;
 import br.com.oficina.mvp.domains.WorkOrderService;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -90,7 +91,7 @@ public record ServiceOrderResponseDto(
         }
     }
 
-    public record HistoryView(Long id, ServiceOrderStatus status, String comment, java.time.LocalDateTime changedAt) {
+    public record HistoryView(Long id, ServiceOrderStatus status, String comment, LocalDateTime changedAt) {
         static HistoryView from(ServiceOrderStatusHistory history) {
             return new HistoryView(history.getId(), history.getStatus(), history.getComment(), history.getChangedAt());
         }

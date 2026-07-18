@@ -27,15 +27,14 @@ public class GlobalExceptionHandler {
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             fields.put(error.getField(), error.getDefaultMessage());
         }
-        return build(HttpStatus.BAD_REQUEST, "Dados inválidos.", request.getRequestURI(), fields);
+        return invalidData(fields, request);
     }
-
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiError> handleConstraintViolation(ConstraintViolationException ex, HttpServletRequest request) {
         Map<String, Object> fields = new LinkedHashMap<>();
         ex.getConstraintViolations().forEach(violation -> fields.put(violation.getPropertyPath().toString(), violation.getMessage()));
-        return build(HttpStatus.BAD_REQUEST, "Dados inválidos.", request.getRequestURI(), fields);
+        return invalidData(fields, request);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -46,6 +45,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneric(Exception ex, HttpServletRequest request) {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Erro interno inesperado.", request.getRequestURI(), Map.of());
+    }
+
+    private ResponseEntity<ApiError> invalidData(Map<String, Object> fields, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "Dados inválidos.", request.getRequestURI(), fields);
     }
 
     private ResponseEntity<ApiError> build(HttpStatus status, String message, String path, Map<String, Object> details) {

@@ -24,14 +24,14 @@ import static org.mockito.Mockito.when;
 class CatalogServiceTest {
 
     @Mock
-    ServiceCatalogItemRepository repository;
+    ServiceCatalogItemRepository catalog;
 
     @InjectMocks
     CatalogService service;
 
     @Test
     void shouldListCatalogItems() {
-        when(repository.findAll()).thenReturn(List.of(
+        when(catalog.findAll()).thenReturn(List.of(
                 new ServiceCatalogItem("Troca de óleo", "Completa", new BigDecimal("150.00"), 60, true)
         ));
 
@@ -41,7 +41,7 @@ class CatalogServiceTest {
     @Test
     void shouldCreateCatalogItem() {
         var request = new ServiceCatalogItemRequestDto("Troca de óleo", "Completa", new BigDecimal("150.00"), 60, true);
-        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(catalog.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var result = service.create(request);
 
@@ -51,7 +51,7 @@ class CatalogServiceTest {
     @Test
     void shouldUpdateCatalogItem() {
         var item = new ServiceCatalogItem("Troca de óleo", "Completa", new BigDecimal("150.00"), 60, true);
-        when(repository.findById(1L)).thenReturn(Optional.of(item));
+        when(catalog.findById(1L)).thenReturn(Optional.of(item));
 
         var request = new ServiceCatalogItemRequestDto("Alinhamento", "Completo", new BigDecimal("80.00"), 45, false);
         var result = service.update(1L, request);
@@ -63,14 +63,14 @@ class CatalogServiceTest {
     @Test
     void shouldFindById() {
         var item = new ServiceCatalogItem("Troca de óleo", "Completa", new BigDecimal("150.00"), 60, true);
-        when(repository.findById(1L)).thenReturn(Optional.of(item));
+        when(catalog.findById(1L)).thenReturn(Optional.of(item));
 
         assertThat(service.findById(1L).name()).isEqualTo("Troca de óleo");
     }
 
     @Test
     void shouldThrowWhenNotFound() {
-        when(repository.findById(99L)).thenReturn(Optional.empty());
+        when(catalog.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findById(99L))
                 .isInstanceOf(BusinessException.class)
@@ -80,10 +80,10 @@ class CatalogServiceTest {
     @Test
     void shouldDeleteCatalogItem() {
         var item = new ServiceCatalogItem("Troca de óleo", null, new BigDecimal("150.00"), 60, true);
-        when(repository.findById(1L)).thenReturn(Optional.of(item));
+        when(catalog.findById(1L)).thenReturn(Optional.of(item));
 
         service.delete(1L);
 
-        verify(repository).delete(item);
+        verify(catalog).delete(item);
     }
 }

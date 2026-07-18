@@ -22,14 +22,14 @@ import static org.mockito.Mockito.when;
 class ReportServiceTest {
 
     @Mock
-    ServiceOrderRepository repository;
+    ServiceOrderRepository serviceOrders;
 
     @InjectMocks
     ReportService service;
 
     @Test
     void shouldReturnZeroWhenNoCompletedOrders() {
-        when(repository.findAll()).thenReturn(List.of());
+        when(serviceOrders.findAll()).thenReturn(List.of());
 
         var result = service.averageExecutionTime();
 
@@ -41,7 +41,7 @@ class ReportServiceTest {
     @Test
     void shouldIgnoreOrdersWithoutTimestamps() {
         var order = createOrder("OS-001");
-        when(repository.findAll()).thenReturn(List.of(order));
+        when(serviceOrders.findAll()).thenReturn(List.of(order));
 
         var result = service.averageExecutionTime();
 
@@ -58,7 +58,7 @@ class ReportServiceTest {
         ReflectionTestUtils.setField(order2, "startedAt", OffsetDateTime.parse("2026-01-01T08:00:00+00:00"));
         ReflectionTestUtils.setField(order2, "finalizedAt", OffsetDateTime.parse("2026-01-01T10:00:00+00:00"));
 
-        when(repository.findAll()).thenReturn(List.of(order1, order2));
+        when(serviceOrders.findAll()).thenReturn(List.of(order1, order2));
 
         var result = service.averageExecutionTime();
 

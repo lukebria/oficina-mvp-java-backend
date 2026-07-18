@@ -9,15 +9,15 @@ import java.time.Duration;
 
 @Service
 public class ReportService {
-    private final ServiceOrderRepository repository;
+    private final ServiceOrderRepository serviceOrders;
 
-    public ReportService(ServiceOrderRepository repository) {
-        this.repository = repository;
+    public ReportService(ServiceOrderRepository serviceOrders) {
+        this.serviceOrders = serviceOrders;
     }
 
     @Transactional(readOnly = true)
     public AverageExecutionTimeResponseDto averageExecutionTime() {
-        var durations = repository.findAll()
+        var durations = serviceOrders.findAll()
                 .stream()
                 .filter(order -> order.getStartedAt() != null && order.getFinalizedAt() != null)
                 .map(order -> Duration.between(order.getStartedAt(), order.getFinalizedAt()).toMinutes())

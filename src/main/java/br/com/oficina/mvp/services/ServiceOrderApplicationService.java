@@ -26,7 +26,6 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -54,12 +53,10 @@ public class ServiceOrderApplicationService {
 
     @Transactional(readOnly = true)
     public List<ServiceOrderResponseDto> list() {
-
         return serviceOrders.findAll()
                 .stream()
                 .map(ServiceOrderResponseDto::from)
                 .collect(Collectors.toList());
-
     }
 
     @Transactional(readOnly = true)
@@ -69,48 +66,53 @@ public class ServiceOrderApplicationService {
 
     @Transactional
     public ServiceOrderResponseDto create(CreateServiceOrderRequestDto request) {
-        var document = DocumentValidator.normalize(request.customerDocument());
-        if (!DocumentValidator.isValidCpfOrCnpj(document)) {
-            throw new BusinessException("CPF/CNPJ inválido.", HttpStatus.BAD_REQUEST);
-        }
+        var document = DocumentValidator.requireValid(request.customerDocument());
+        var plate = PlateValidator.requireValid(request.vehicle().plate());
 
-        var plate = PlateValidator.normalize(request.vehicle().plate());
-        if (!PlateValidator.isValidBrazilianPlate(plate)) {
-            throw new BusinessException("Placa de veículo inválida.", HttpStatus.BAD_REQUEST);
-        }
-
-        var customer = customers.findByDocument(document)
-                .orElseGet(() -> customers.save(new Customer(
-                        request.customer().name(), document, request.customer().email(), request.customer().phone()
-                )));
-        customer.update(request.customer().name(), document, request.customer().email(), request.customer().phone());
-
-        var vehicle = vehicles.findByPlate(plate)
-                .orElseGet(() -> vehicles.save(new Vehicle(
-                        customer, plate, request.vehicle().brand(), request.vehicle().model(), request.vehicle().manufacturingYear()
-                )));
-        vehicle.update(customer, plate, request.vehicle().brand(), request.vehicle().model(), request.vehicle().manufacturingYear());
+        var customer = resolveCustomer(request.customer(), document);
+        var vehicle = resolveVehicle(request.vehicle(), customer, plate);
 
         var order = new ServiceOrder(generateOrderCode(), customer, vehicle, request.customerNotes());
+        addRequestedServices(order, request.services());
+        addRequestedParts(order, request.parts());
 
-        for (var requestedService : request.services()) {
+        order.markBudgetWaitingApproval();
+        return ServiceOrderResponseDto.from(serviceOrders.save(order));
+    }
+
+    private Customer resolveCustomer(CreateServiceOrderRequestDto.CustomerData data, String document) {
+        var customer = customers.findByDocument(document)
+                .orElseGet(() -> customers.save(new Customer(data.name(), document, data.email(), data.phone())));
+        customer.update(data.name(), document, data.email(), data.phone());
+        return customer;
+    }
+
+    private Vehicle resolveVehicle(CreateServiceOrderRequestDto.VehicleData data, Customer customer, String plate) {
+        var vehicle = vehicles.findByPlate(plate)
+                .orElseGet(() -> vehicles.save(new Vehicle(customer, plate, data.brand(), data.model(), data.manufacturingYear())));
+        vehicle.update(customer, plate, data.brand(), data.model(), data.manufacturingYear());
+        return vehicle;
+    }
+
+    private void addRequestedServices(ServiceOrder order, List<CreateServiceOrderRequestDto.ServiceItemData> requestedServices) {
+        for (var requestedService : requestedServices) {
             var serviceItem = catalog.findById(requestedService.serviceItemId())
                     .filter(item -> Boolean.TRUE.equals(item.getActive()))
                     .orElseThrow(() -> new BusinessException("Um ou mais serviços informados não existem ou estão inativos.", HttpStatus.BAD_REQUEST));
             order.addService(new WorkOrderService(serviceItem, requestedService.quantity()));
         }
+    }
 
-        if (request.parts() != null) {
-            for (var requestedPart : request.parts()) {
-                var part = parts.findById(requestedPart.partId())
-                        .filter(item -> Boolean.TRUE.equals(item.getActive()))
-                        .orElseThrow(() -> new BusinessException("Uma ou mais peças informadas não existem ou estão inativas.", HttpStatus.BAD_REQUEST));
-                order.addPart(new WorkOrderPart(part, requestedPart.quantity()));
-            }
+    private void addRequestedParts(ServiceOrder order, List<CreateServiceOrderRequestDto.PartItemData> requestedParts) {
+        if (requestedParts == null) {
+            return;
         }
-
-        order.markBudgetWaitingApproval();
-        return ServiceOrderResponseDto.from(serviceOrders.save(order));
+        for (var requestedPart : requestedParts) {
+            var part = parts.findById(requestedPart.partId())
+                    .filter(item -> Boolean.TRUE.equals(item.getActive()))
+                    .orElseThrow(() -> new BusinessException("Uma ou mais peças informadas não existem ou estão inativas.", HttpStatus.BAD_REQUEST));
+            order.addPart(new WorkOrderPart(part, requestedPart.quantity()));
+        }
     }
 
     @Transactional

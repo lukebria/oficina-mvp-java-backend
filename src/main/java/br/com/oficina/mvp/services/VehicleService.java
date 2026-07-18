@@ -33,8 +33,7 @@ public class VehicleService {
     @Transactional
     public VehicleResponseDto create(VehicleRequestDto request) {
         var customer = customerService.findEntity(request.customerId());
-        var plate = PlateValidator.normalize(request.plate());
-        validatePlate(plate);
+        var plate = PlateValidator.requireValid(request.plate());
         return VehicleResponseDto.from(vehicles.save(new Vehicle(customer, plate, request.brand(), request.model(),
                 request.manufacturingYear())));
     }
@@ -43,8 +42,7 @@ public class VehicleService {
     public VehicleResponseDto update(Long id, VehicleRequestDto request) {
         var vehicle = findEntity(id);
         var customer = customerService.findEntity(request.customerId());
-        var plate = PlateValidator.normalize(request.plate());
-        validatePlate(plate);
+        var plate = PlateValidator.requireValid(request.plate());
         vehicle.update(customer, plate, request.brand(), request.model(), request.manufacturingYear());
         return VehicleResponseDto.from(vehicle);
     }
@@ -55,11 +53,5 @@ public class VehicleService {
     public Vehicle findEntity(Long id) {
         return vehicles.findById(id)
                 .orElseThrow(() -> new BusinessException("Veículo não encontrado.", HttpStatus.NOT_FOUND));
-    }
-
-    private void validatePlate(String plate) {
-        if (!PlateValidator.isValidBrazilianPlate(plate)) {
-            throw new BusinessException("Placa de veículo inválida.", HttpStatus.BAD_REQUEST);
-        }
     }
 }

@@ -14,15 +14,15 @@ import java.util.stream.Collectors;
 
 @Service
 public class PartService {
-    private final PartRepository repository;
+    private final PartRepository parts;
 
-    public PartService(PartRepository repository) {
-        this.repository = repository;
+    public PartService(PartRepository parts) {
+        this.parts = parts;
     }
 
     @Transactional(readOnly = true)
     public List<PartResponseDto> list() {
-        return repository.findAll()
+        return parts.findAll()
                 .stream()
                 .map(PartResponseDto::from)
                 .collect(Collectors.toList());
@@ -35,7 +35,7 @@ public class PartService {
 
     @Transactional
     public PartResponseDto create(PartRequestDto request) {
-        return PartResponseDto.from(repository.save(new Part(
+        return PartResponseDto.from(parts.save(new Part(
                 request.name(), request.sku(), request.unitPrice(), request.stockQuantity(), request.minStock(), request.active()
         )));
     }
@@ -49,11 +49,11 @@ public class PartService {
 
     @Transactional
     public void delete(Long id) {
-        repository.delete(findEntity(id));
+        parts.delete(findEntity(id));
     }
 
     public Part findEntity(Long id) {
-        return repository.findById(id)
+        return parts.findById(id)
                 .orElseThrow(() -> new BusinessException("Peça/insumo não encontrado.", HttpStatus.NOT_FOUND));
     }
 }

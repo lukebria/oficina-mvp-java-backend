@@ -21,29 +21,29 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/customers")
 public class CustomerController {
-    private final CustomerService service;
+    private final CustomerService customerService;
 
-    public CustomerController(CustomerService service) { this.service = service; }
+    public CustomerController(CustomerService customerService) { this.customerService = customerService; }
 
     @GetMapping
     @Operation(summary = "Lista clientes")
-    public List<CustomerResponseDto> list() { return service.list(); }
+    public List<CustomerResponseDto> list() { return customerService.list(); }
 
     @GetMapping("/{id}")
     @Operation(summary = "Detalha cliente")
-    public CustomerResponseDto findById(@PathVariable Long id) { return service.findById(id); }
+    public CustomerResponseDto findById(@PathVariable Long id) { return customerService.findById(id); }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Cria cliente")
-    public CustomerResponseDto create(@RequestBody @Valid CustomerRequestDto request) { return service.create(request); }
+    public CustomerResponseDto create(@RequestBody @Valid CustomerRequestDto request) { return customerService.create(request); }
 
     @PutMapping("/{id}")
     @Operation(summary = "Atualiza cliente")
-    public CustomerResponseDto update(@PathVariable Long id, @RequestBody @Valid CustomerRequestDto request) { return service.update(id, request); }
+    public CustomerResponseDto update(@PathVariable Long id, @RequestBody @Valid CustomerRequestDto request) { return customerService.update(id, request); }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Remove cliente")
-    public void delete(@PathVariable Long id) { service.delete(id); }
+    public void delete(@PathVariable Long id) { customerService.delete(id); }
 }
