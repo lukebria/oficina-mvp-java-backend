@@ -67,29 +67,38 @@ automático, aprovação pelo cliente, histórico de status e relatório de temp
 
 ## Arquitetura do projeto
 
-O projeto é um **monolito em camadas** com DDD pragmático. Ele não está separado fisicamente por módulos de domínio; a
-estrutura atual usa pacotes por responsabilidade técnica:
+O projeto é um **monolito modular organizado por módulos de negócio**, seguindo os princípios de **Arquitetura
+Hexagonal (Ports & Adapters)**. Cada módulo (`customer`, `vehicle`, `catalog`, `part`, `auth`, `serviceorder`,
+`report`) é um pacote físico próprio com o mesmo esqueleto interno:
 
 ```txt
 src/main/java/br/com/oficina/mvp/
   OficinaMvpApplication.java
-  controllers/       endpoints REST
-  domains/           entidades JPA e regras de domínio
-  domains/base/      entidade base com id, createdAt e updatedAt
-  dtos/              records de request/response
-  dtos/enums/        enums da aplicação
-  infra/             repositórios Spring Data JPA
-  services/          casos de uso e orquestração
-  shared/config/     segurança, CORS, OpenAPI, seed e properties
-  shared/exception/  exceções e handler global
-  shared/security/   filtro e serviço JWT
-  shared/validation/ validadores de CPF/CNPJ e placa
+  <modulo>/
+    domain/                     entidade JPA e regras de domínio do módulo
+    application/                caso de uso (implementa as portas de entrada)
+    application/port/in/        portas de entrada — interface de caso de uso + Command/Result
+    application/port/out/       portas de saída — o que o módulo precisa de fora (ex: repositório)
+    adapter/in/web/             controller REST + DTOs de request/response
+    adapter/out/persistence/    repositório Spring Data (package-private) + adapter da porta
+  shared/
+    domain/     vocabulário compartilhado entre módulos (BaseEntity, enums Role e ServiceOrderStatus)
+    config/     segurança, CORS, OpenAPI, seed e properties
+    exception/  exceções e handler global
+    security/   filtro e serviço JWT
+    validation/ validadores de CPF/CNPJ e placa
+    api/        endpoints técnicos que não pertencem a um módulo de negócio (healthcheck)
 ```
+
+Quando um módulo precisa de outro (por exemplo `serviceorder` buscando `Customer`, `Vehicle`, `ServiceCatalogItem` e
+`Part`), ele depende sempre da **porta** do módulo alheio (`CustomerRepositoryPort`, `VehicleUseCase` etc.), nunca da
+implementação concreta ou do repositório JPA do outro módulo. Detalhamento completo, camada por camada e módulo por
+módulo, está em [`docs/architecture.md`](docs/architecture.md).
 
 As principais regras de negócio ficam em:
 
-- `ServiceOrderApplicationService`: criação, aprovação, validação de estoque, baixa de estoque, consulta pública e
-  status de OS;
+- `ServiceOrderService` (módulo `serviceorder`): criação, aprovação, validação de estoque, baixa de estoque, consulta
+  pública e status de OS;
 - `ServiceOrder`: cálculo de totais, histórico e timestamps de status;
 - `ServiceOrderStatusPolicy`: transições permitidas de status;
 - `DocumentValidator`: validação de CPF/CNPJ;
@@ -606,7 +615,8 @@ Modelo entidade-relacionamento visual do banco.
 
 ## Pontos de atenção
 
-- O projeto está organizado por camadas técnicas, não por pacotes físicos de domínio.
+- O domínio de cada módulo permanece anotado com JPA (`@Entity`) — não há separação entre entidade de persistência e
+  modelo de domínio puro; foi uma escolha pragmática para não multiplicar classes de mapeamento.
 - O Hibernate está com `ddl-auto: validate`; alterações de schema devem ser feitas via Flyway.
 - O campo `diagnosis` existe em `ServiceOrder` e na tabela `service_orders`, mas ainda não possui endpoint específico de
   preenchimento.
