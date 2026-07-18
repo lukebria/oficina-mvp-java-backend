@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Testes de ponta a ponta (Spring Security real, sem mocks) para a matriz de autorização granular por role definida
  * em {@code SecurityConfig}. Cobre as "formas" de regra que existem na matriz — todos os três papéis, só ADMIN,
- * ADMIN+MECHANIC e rota pública — em vez de repetir a mesma checagem para cada uma das ~30 combinações rota/método.
+ * ADMIN+MECHANIC e rota pública — em vez de repetir a mesma checagem para cada uma das ~30 combinações rota/méthodo.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

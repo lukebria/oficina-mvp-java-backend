@@ -75,7 +75,7 @@ class LazyAssociationSerializationIntegrationTest {
         var customer = customers.save(new Customer("João Silva", "52998224725", "joao@teste.com", "11999999999"));
         var vehicle = vehicles.save(new Vehicle(customer, "ABC1234", "Fiat", "Uno", 2020));
 
-        // A lista mistura dados de todo método de teste desta classe (mesmo H2, ordem de execução não garantida);
+        // A lista mistura dados de tod méthodo de teste desta classe (mesmo H2, ordem de execução não garantida);
         // o ponto aqui é só confirmar que a serialização não estoura LazyInitializationException.
         mvc.perform(get("/api/vehicles").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
