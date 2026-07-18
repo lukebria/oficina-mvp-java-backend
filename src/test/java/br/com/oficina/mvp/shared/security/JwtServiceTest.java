@@ -1,7 +1,7 @@
 package br.com.oficina.mvp.shared.security;
 
-import br.com.oficina.mvp.domains.User;
-import br.com.oficina.mvp.dtos.enums.Role;
+import br.com.oficina.mvp.auth.domain.User;
+import br.com.oficina.mvp.shared.domain.Role;
 import br.com.oficina.mvp.shared.config.JwtProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

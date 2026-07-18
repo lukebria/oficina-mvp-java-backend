@@ -1,6 +1,6 @@
 package br.com.oficina.mvp.shared.security;
 
-import br.com.oficina.mvp.domains.User;
+import br.com.oficina.mvp.auth.domain.User;
 import br.com.oficina.mvp.shared.config.JwtProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
