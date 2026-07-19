@@ -29,9 +29,9 @@ public class PublicServiceOrderController {
         return PublicServiceOrderResponseDto.from(publicServiceOrderUseCase.findByCode(code, document));
     }
 
-    @PostMapping("/{code}/approve")
-    @Operation(summary = "Aprovação pública do orçamento pelo cliente")
-    public PublicServiceOrderResponseDto approve(@PathVariable String code, @RequestBody @Valid CustomerApprovalRequestDto request) {
-        return PublicServiceOrderResponseDto.from(publicServiceOrderUseCase.approveByCustomer(code, request.document(), request.comment()));
+    @PostMapping("/{code}/approval")
+    @Operation(summary = "Registra a decisão (aprovação ou recusa) pública do orçamento pelo cliente")
+    public PublicServiceOrderResponseDto decideApproval(@PathVariable String code, @RequestBody @Valid CustomerApprovalRequestDto request) {
+        return PublicServiceOrderResponseDto.from(publicServiceOrderUseCase.decideApprovalByCustomer(code, request.document(), request.approved(), request.comment()));
     }
 }

@@ -17,6 +17,7 @@ class ServiceOrderStatusPolicyTest {
         ServiceOrderStatusPolicy.assertTransition(ServiceOrderStatus.RECEBIDA, ServiceOrderStatus.AGUARDANDO_APROVACAO);
         ServiceOrderStatusPolicy.assertTransition(ServiceOrderStatus.EM_DIAGNOSTICO, ServiceOrderStatus.AGUARDANDO_APROVACAO);
         ServiceOrderStatusPolicy.assertTransition(ServiceOrderStatus.AGUARDANDO_APROVACAO, ServiceOrderStatus.EM_EXECUCAO);
+        ServiceOrderStatusPolicy.assertTransition(ServiceOrderStatus.AGUARDANDO_APROVACAO, ServiceOrderStatus.RECUSADA);
         ServiceOrderStatusPolicy.assertTransition(ServiceOrderStatus.EM_EXECUCAO, ServiceOrderStatus.FINALIZADA);
         ServiceOrderStatusPolicy.assertTransition(ServiceOrderStatus.FINALIZADA, ServiceOrderStatus.ENTREGUE);
     }
@@ -39,16 +40,17 @@ class ServiceOrderStatusPolicyTest {
         assertThat(ServiceOrderStatusPolicy.allowedTransitions(ServiceOrderStatus.EM_DIAGNOSTICO))
                 .containsExactly(ServiceOrderStatus.AGUARDANDO_APROVACAO);
         assertThat(ServiceOrderStatusPolicy.allowedTransitions(ServiceOrderStatus.AGUARDANDO_APROVACAO))
-                .containsExactly(ServiceOrderStatus.EM_EXECUCAO);
+                .containsExactly(ServiceOrderStatus.EM_EXECUCAO, ServiceOrderStatus.RECUSADA);
         assertThat(ServiceOrderStatusPolicy.allowedTransitions(ServiceOrderStatus.EM_EXECUCAO))
                 .containsExactly(ServiceOrderStatus.FINALIZADA);
         assertThat(ServiceOrderStatusPolicy.allowedTransitions(ServiceOrderStatus.FINALIZADA))
                 .containsExactly(ServiceOrderStatus.ENTREGUE);
         assertThat(ServiceOrderStatusPolicy.allowedTransitions(ServiceOrderStatus.ENTREGUE)).isEmpty();
+        assertThat(ServiceOrderStatusPolicy.allowedTransitions(ServiceOrderStatus.RECUSADA)).isEmpty();
     }
 
     @ParameterizedTest
-    @EnumSource(value = ServiceOrderStatus.class, names = {"ENTREGUE", "FINALIZADA", "EM_EXECUCAO"})
+    @EnumSource(value = ServiceOrderStatus.class, names = {"ENTREGUE", "FINALIZADA", "EM_EXECUCAO", "RECUSADA"})
     void shouldRejectBackwardTransitions(ServiceOrderStatus current) {
         assertThatThrownBy(() -> ServiceOrderStatusPolicy.assertTransition(current, ServiceOrderStatus.RECEBIDA))
                 .isInstanceOf(BusinessException.class);

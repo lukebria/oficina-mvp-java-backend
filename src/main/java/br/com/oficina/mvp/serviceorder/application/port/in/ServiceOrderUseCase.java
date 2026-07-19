@@ -6,13 +6,13 @@ import br.com.oficina.mvp.serviceorder.domain.ServiceOrder;
 import java.util.List;
 
 public interface ServiceOrderUseCase {
-    List<ServiceOrder> list();
+    List<ServiceOrder> list(boolean all);
 
     ServiceOrder findById(Long id);
 
     ServiceOrder create(CreateServiceOrderCommand command);
 
-    ServiceOrder approve(Long id, String comment);
+    ServiceOrder decideApproval(Long id, boolean approved, String comment);
 
     ServiceOrder updateStatus(Long id, ServiceOrderStatus status, String comment);
 

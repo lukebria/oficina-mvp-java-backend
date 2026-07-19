@@ -287,7 +287,7 @@ Além da autenticação, `SecurityConfig` aplica autorização granular por rota
 | `/api/parts/{id}`                                   | DELETE | ADMIN                      |
 | `/api/service-orders`, `/api/service-orders/{id}`   | GET    | ADMIN, MECHANIC, ATTENDANT |
 | `/api/service-orders`                               | POST   | ADMIN, MECHANIC, ATTENDANT |
-| `/api/service-orders/{id}/approve`                  | PATCH  | ADMIN, MECHANIC            |
+| `/api/service-orders/{id}/approval`                 | PATCH  | ADMIN, MECHANIC            |
 | `/api/service-orders/{id}/status`                   | PATCH  | ADMIN, MECHANIC            |
 | `/api/service-orders/{id}/diagnosis`                | PATCH  | ADMIN, MECHANIC            |
 | `/api/reports/average-execution-time`               | GET    | ADMIN                      |
@@ -390,21 +390,49 @@ POST /api/service-orders
   -> altera status para AGUARDANDO_APROVACAO
   -> registra histórico inicial e histórico de orçamento enviado
   -> persiste OS, itens e histórico por cascade (via ServiceOrderRepositoryPort)
+  -> notifica cliente por e-mail (ServiceOrderNotificationPort) sobre o status AGUARDANDO_APROVACAO
 ```
 
 Observação: os preços de serviços e peças são copiados para `WorkOrderService` e `WorkOrderPart` no momento da criação.
 Assim, alterações futuras no catálogo ou no preço da peça não mudam o orçamento já gerado.
 
-### 7.3 Aprovação administrativa da OS
+### 7.2b Listagem de OS
 
 ```txt
-PATCH /api/service-orders/{id}/approve
+GET /api/service-orders?all={boolean, default false}
+  -> ServiceOrderController.list
+  -> ServiceOrderService.list(all) (implementa ServiceOrderUseCase)
+  -> se all=false: ServiceOrderRepositoryPort.findActiveOrderedByStatusPriority
+       -> ServiceOrderJpaRepository.findActiveOrderedByStatusPriority (@Query JPQL com CASE por status)
+  -> se all=true: ServiceOrderRepositoryPort.findAll (sem filtro nem ordenação especial)
+```
+
+Com `all=false` (padrão), filtra `status NOT IN (FINALIZADA, ENTREGUE, RECUSADA)` — exclusão apenas da listagem (não
+física; essas OS continuam acessíveis via `GET /api/service-orders/{id}` ou via `all=true`) — e ordena por:
+
+```txt
+EM_EXECUCAO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA, created_at ASC dentro de cada status
+```
+
+`ServiceOrderRepositoryPort.findAll()` também é usado separadamente por `ReportService` para o relatório de tempo
+médio de execução, que precisa enxergar OS finalizadas independente do parâmetro `all` da listagem.
+
+### 7.3 Decisão administrativa sobre o orçamento da OS
+
+```txt
+PATCH /api/service-orders/{id}/approval
   -> busca OS
-  -> valida estoque das peças
-  -> decrementa estoque
-  -> transiciona AGUARDANDO_APROVACAO -> EM_EXECUCAO
-  -> preenche approvedAt e startedAt
-  -> registra histórico
+  -> se approved=true:
+       -> valida estoque das peças
+       -> decrementa estoque
+       -> transiciona AGUARDANDO_APROVACAO -> EM_EXECUCAO
+       -> preenche approvedAt e startedAt
+       -> registra histórico
+       -> notifica cliente por e-mail (ServiceOrderNotificationPort)
+  -> se approved=false:
+       -> transiciona AGUARDANDO_APROVACAO -> RECUSADA
+       -> registra histórico
+       -> não notifica (RECUSADA é a única transição que não dispara notificação)
 ```
 
 ### 7.4 Consulta e aprovação pública pelo cliente
@@ -420,18 +448,17 @@ GET /api/public/service-orders/{code}?document=<cpf-ou-cnpj>
   -> retorna visão pública da OS
 ```
 
-Aprovação pública:
+Decisão pública sobre o orçamento:
 
 ```txt
-POST /api/public/service-orders/{code}/approve
-  -> PublicServiceOrderController.approve
-  -> ServiceOrderService.approveByCustomer
+POST /api/public/service-orders/{code}/approval
+  -> PublicServiceOrderController.decideApproval
+  -> ServiceOrderService.decideApprovalByCustomer
   -> normaliza document
   -> valida se o documento pertence ao cliente
   -> exige status AGUARDANDO_APROVACAO
-  -> valida estoque
-  -> decrementa estoque
-  -> muda status para EM_EXECUCAO
+  -> se approved=true: valida estoque, decrementa estoque, muda status para EM_EXECUCAO, notifica cliente
+  -> se approved=false: muda status para RECUSADA (não notifica)
   -> registra histórico
 ```
 
@@ -444,6 +471,7 @@ PATCH /api/service-orders/{id}/status
   -> atualiza status
   -> preenche timestamps quando aplicável
   -> registra histórico
+  -> se o novo status != RECUSADA: notifica cliente por e-mail (ServiceOrderNotificationPort)
 ```
 
 Transições permitidas:
@@ -453,9 +481,11 @@ RECEBIDA -> EM_DIAGNOSTICO
 RECEBIDA -> AGUARDANDO_APROVACAO
 EM_DIAGNOSTICO -> AGUARDANDO_APROVACAO
 AGUARDANDO_APROVACAO -> EM_EXECUCAO
+AGUARDANDO_APROVACAO -> RECUSADA
 EM_EXECUCAO -> FINALIZADA
 FINALIZADA -> ENTREGUE
 ENTREGUE -> sem próximas transições
+RECUSADA -> sem próximas transições
 ```
 
 Timestamps preenchidos no domínio:
@@ -481,6 +511,34 @@ PATCH /api/service-orders/{id}/diagnosis
 Não há restrição de status para preencher ou atualizar o diagnóstico — pode ser feito em qualquer etapa do fluxo,
 assim como `customerNotes`. O campo é exposto em `ServiceOrderResponseDto` (fluxo administrativo); a visão pública
 (`PublicServiceOrderResponseDto`) não o inclui.
+
+### 7.7 Notificação de mudança de status
+
+Toda vez que o status da OS muda — na criação (RECEBIDA -> AGUARDANDO_APROVACAO automático), na aprovação
+(-> EM_EXECUCAO), e em qualquer transição feita via `PATCH /{id}/status` — o cliente é notificado, **exceto** quando
+o novo status é `RECUSADA`.
+
+```txt
+ServiceOrderNotificationPort.notifyStatusChanged(order)
+  -> serviceorder.application.port.out (porta de saída)
+  -> implementada por ServiceOrderStatusNotificationAdapter (serviceorder.adapter.out.notification)
+```
+
+O canal definido é e-mail (`order.getCustomer().getEmail()`). Nesta primeira etapa do MVP, o adapter apenas loga a
+notificação (sem envio real); como é uma porta de saída, trocar por um envio real de e-mail (SMTP, provedor
+transacional etc.) é uma questão de implementar um novo adapter para `ServiceOrderNotificationPort`, sem alterar
+domínio nem application. Se o cliente não tiver e-mail cadastrado (campo opcional em `Customer`), o adapter loga um
+aviso e não falha a operação.
+
+Chamada apenas nos pontos que efetivamente mudam o status (não em `updateDiagnosis`), e condicionada ao status
+resultante ser diferente de `RECUSADA`:
+
+| Origem                                          | Notifica?                                  |
+|--------------------------------------------------|---------------------------------------------|
+| `create` (RECEBIDA -> AGUARDANDO_APROVACAO)      | Sempre                                       |
+| `decideApproval` / `decideApprovalByCustomer`, approved=true  | Sim (-> EM_EXECUCAO)           |
+| `decideApproval` / `decideApprovalByCustomer`, approved=false | Não (-> RECUSADA)              |
+| `updateStatus`                                    | Sim, exceto se o status alvo for `RECUSADA` |
 
 ### 7.7 Relatório de tempo médio
 
