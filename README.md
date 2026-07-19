@@ -587,6 +587,13 @@ Timestamps relevantes:
 | `finalizedAt` | Ao entrar em `FINALIZADA`                       |
 | `deliveredAt` | Ao entrar em `ENTREGUE`                         |
 
+## Notificação de mudança de status
+
+Toda vez que o status da OS muda (na criação, na aprovação, ou via `PATCH /{id}/status`), o cliente é notificado por
+e-mail — **exceto** quando o novo status é `RECUSADA`. Nesta primeira etapa do MVP, a notificação apenas é logada
+(sem envio real de e-mail); veja `ServiceOrderNotificationPort` / `ServiceOrderStatusNotificationAdapter` e a
+seção 7.7 de `docs/architecture.md` para detalhes.
+
 ## Banco de dados
 
 O banco é PostgreSQL e o schema é versionado com Flyway.

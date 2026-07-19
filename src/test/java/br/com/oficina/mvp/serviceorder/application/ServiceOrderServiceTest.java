@@ -8,6 +8,7 @@ import br.com.oficina.mvp.shared.domain.ServiceOrderStatus;
 import br.com.oficina.mvp.part.application.port.out.PartRepositoryPort;
 import br.com.oficina.mvp.part.domain.Part;
 import br.com.oficina.mvp.serviceorder.application.port.in.CreateServiceOrderCommand;
+import br.com.oficina.mvp.serviceorder.application.port.out.ServiceOrderNotificationPort;
 import br.com.oficina.mvp.serviceorder.application.port.out.ServiceOrderRepositoryPort;
 import br.com.oficina.mvp.serviceorder.domain.ServiceOrder;
 import br.com.oficina.mvp.serviceorder.domain.WorkOrderPart;
@@ -30,6 +31,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +49,8 @@ class ServiceOrderServiceTest {
     CatalogRepositoryPort catalog;
     @Mock
     PartRepositoryPort parts;
+    @Mock
+    ServiceOrderNotificationPort notifications;
 
     @InjectMocks
     ServiceOrderService service;
@@ -118,6 +124,7 @@ class ServiceOrderServiceTest {
 
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.AGUARDANDO_APROVACAO);
         assertThat(result.getCode()).startsWith("OS-");
+        verify(notifications, times(1)).notifyStatusChanged(result);
     }
 
     @Test
@@ -212,6 +219,7 @@ class ServiceOrderServiceTest {
 
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.EM_EXECUCAO);
         assertThat(part.getStockQuantity()).isEqualTo(8);
+        verify(notifications, times(1)).notifyStatusChanged(result);
     }
 
     @Test
@@ -239,6 +247,7 @@ class ServiceOrderServiceTest {
 
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.RECUSADA);
         assertThat(part.getStockQuantity()).isEqualTo(10);
+        verify(notifications, never()).notifyStatusChanged(any());
     }
 
     @Test
@@ -250,6 +259,19 @@ class ServiceOrderServiceTest {
         var result = service.updateStatus(1L, ServiceOrderStatus.EM_DIAGNOSTICO, "Diagnóstico");
 
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.EM_DIAGNOSTICO);
+        verify(notifications, times(1)).notifyStatusChanged(result);
+    }
+
+    @Test
+    void shouldNotNotifyWhenUpdateStatusTargetsRecusada() {
+        var order = orderWaitingApproval();
+        ReflectionTestUtils.setField(order, "id", 1L);
+        when(serviceOrders.findById(1L)).thenReturn(Optional.of(order));
+
+        var result = service.updateStatus(1L, ServiceOrderStatus.RECUSADA, "Cliente recusou");
+
+        assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.RECUSADA);
+        verify(notifications, never()).notifyStatusChanged(any());
     }
 
     @Test
@@ -300,6 +322,7 @@ class ServiceOrderServiceTest {
         var result = service.decideApprovalByCustomer("OS-PUBLIC", "529.982.247-25", true, null);
 
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.EM_EXECUCAO);
+        verify(notifications, times(1)).notifyStatusChanged(result);
     }
 
     @Test
@@ -312,6 +335,7 @@ class ServiceOrderServiceTest {
 
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.RECUSADA);
         assertThat(part.getStockQuantity()).isEqualTo(10);
+        verify(notifications, never()).notifyStatusChanged(any());
     }
 
     @Test

@@ -59,7 +59,7 @@ conceito-a-conceito com um backend TS/Node equivalente.
 | `vehicle`                 | Cadastro de veículos e validação de placa                     | `VehicleController`, `VehicleUseCase`, `VehicleCommand`, `VehicleService`, `VehicleRepositoryPort`, `Vehicle`, `VehicleRequestDto`, `VehicleResponseDto`     |
 | `catalog`                 | Catálogo de serviços da oficina                                | `CatalogController`, `CatalogUseCase`, `CatalogCommand`, `CatalogService`, `CatalogRepositoryPort`, `ServiceCatalogItem`, `ServiceCatalogItemRequestDto`, `ServiceCatalogItemResponseDto` |
 | `part`                    | Peças/insumos e estoque                                       | `PartController`, `PartUseCase`, `PartCommand`, `PartService`, `PartRepositoryPort`, `Part`, `PartRequestDto`, `PartResponseDto`                             |
-| `serviceorder`            | Ordem de serviço, orçamento, aprovação, status e histórico     | `ServiceOrderController`, `PublicServiceOrderController`, `ServiceOrderUseCase`, `PublicServiceOrderUseCase`, `CreateServiceOrderCommand`, `ServiceOrderService`, `ServiceOrderRepositoryPort`, `ServiceOrder`, `WorkOrderService`, `WorkOrderPart`, `WorkOrderLineItem`, `ServiceOrderStatusHistory`, `ServiceOrderStatusPolicy` |
+| `serviceorder`            | Ordem de serviço, orçamento, aprovação, status e histórico     | `ServiceOrderController`, `PublicServiceOrderController`, `ServiceOrderUseCase`, `PublicServiceOrderUseCase`, `CreateServiceOrderCommand`, `ServiceOrderService`, `ServiceOrderRepositoryPort`, `ServiceOrderNotificationPort`, `ServiceOrderStatusNotificationAdapter`, `ServiceOrder`, `WorkOrderService`, `WorkOrderPart`, `WorkOrderLineItem`, `ServiceOrderStatusHistory`, `ServiceOrderStatusPolicy` |
 | `report`                  | Tempo médio de execução (só leitura, sem `domain` próprio)     | `ReportController`, `ReportUseCase`, `AverageExecutionTimeResult`, `ReportService` (lê via `ServiceOrderRepositoryPort` do módulo `serviceorder`), `AverageExecutionTimeResponseDto` |
 | `shared`                  | Vocabulário e infraestrutura transversal                       | `shared.domain.BaseEntity`, `shared.domain.Role`, `shared.domain.ServiceOrderStatus`, `SecurityConfig`, `JwtService`, `JwtAuthenticationFilter`, `GlobalExceptionHandler`, `ApiError`, `BusinessException`, `DocumentValidator`, `PlateValidator`, `DataSeeder`, `OpenApiConfig`, `shared.api.HealthController` |
 
@@ -169,6 +169,7 @@ diretamente; tudo passa pela porta (`*RepositoryPort`).
 | Calcular orçamento      | `ServiceOrder.recalculateTotals`                                              |
 | Enviar para aprovação   | `ServiceOrder.markBudgetWaitingApproval`                                      |
 | Persistir agregado      | `ServiceOrderRepositoryPort.save` com cascade                                 |
+| Notificar cliente        | `ServiceOrderNotificationPort.notifyStatusChanged` (status resultante nunca é `RECUSADA` aqui) |
 
 ### 6.3 Aprovação e estoque
 
@@ -179,6 +180,7 @@ diretamente; tudo passa pela porta (`*RepositoryPort`).
 | Baixar estoque             | `ServiceOrderService.decrementStock` + `Part.decrementStock`             |
 | Mudar status               | `ServiceOrder.decideApproval`                                             |
 | Registrar histórico        | `ServiceOrderStatusHistory`                                               |
+| Notificar cliente          | `ServiceOrderNotificationPort.notifyStatusChanged`, só quando `approved=true` |
 
 ### 6.4 Relatório
 

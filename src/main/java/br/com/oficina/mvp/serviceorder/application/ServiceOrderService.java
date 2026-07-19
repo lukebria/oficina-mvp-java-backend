@@ -9,6 +9,7 @@ import br.com.oficina.mvp.part.domain.Part;
 import br.com.oficina.mvp.serviceorder.application.port.in.CreateServiceOrderCommand;
 import br.com.oficina.mvp.serviceorder.application.port.in.PublicServiceOrderUseCase;
 import br.com.oficina.mvp.serviceorder.application.port.in.ServiceOrderUseCase;
+import br.com.oficina.mvp.serviceorder.application.port.out.ServiceOrderNotificationPort;
 import br.com.oficina.mvp.serviceorder.application.port.out.ServiceOrderRepositoryPort;
 import br.com.oficina.mvp.serviceorder.domain.ServiceOrder;
 import br.com.oficina.mvp.serviceorder.domain.WorkOrderPart;
@@ -37,19 +38,22 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
     private final VehicleRepositoryPort vehicles;
     private final CatalogRepositoryPort catalog;
     private final PartRepositoryPort parts;
+    private final ServiceOrderNotificationPort notifications;
 
     public ServiceOrderService(
             ServiceOrderRepositoryPort serviceOrders,
             CustomerRepositoryPort customers,
             VehicleRepositoryPort vehicles,
             CatalogRepositoryPort catalog,
-            PartRepositoryPort parts
+            PartRepositoryPort parts,
+            ServiceOrderNotificationPort notifications
     ) {
         this.serviceOrders = serviceOrders;
         this.customers = customers;
         this.vehicles = vehicles;
         this.catalog = catalog;
         this.parts = parts;
+        this.notifications = notifications;
     }
 
     @Override
@@ -78,7 +82,9 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
         addRequestedParts(order, command.parts());
 
         order.markBudgetWaitingApproval();
-        return serviceOrders.save(order);
+        var saved = serviceOrders.save(order);
+        notifications.notifyStatusChanged(saved);
+        return saved;
     }
 
     private Customer resolveCustomer(CreateServiceOrderCommand.CustomerData data, String document) {
@@ -125,6 +131,9 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
             decrementStock(order);
         }
         order.decideApproval(approved, comment);
+        if (approved) {
+            notifications.notifyStatusChanged(order);
+        }
         return order;
     }
 
@@ -133,6 +142,9 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
     public ServiceOrder updateStatus(Long id, ServiceOrderStatus status, String comment) {
         var order = findEntity(id);
         order.changeStatus(status, comment);
+        if (status != ServiceOrderStatus.RECUSADA) {
+            notifications.notifyStatusChanged(order);
+        }
         return order;
     }
 
@@ -175,6 +187,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
             validateStock(order);
             decrementStock(order);
             order.decideApproval(true, comment == null ? "Orçamento aprovado pelo cliente. OS enviada para execução." : comment);
+            notifications.notifyStatusChanged(order);
         } else {
             order.decideApproval(false, comment == null ? "Orçamento recusado pelo cliente." : comment);
         }
