@@ -20,6 +20,17 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 management:
   endpoints:
@@ -42,3 +53,5 @@ app:
   seed:
     admin-email: ${SEED_ADMIN_EMAIL:admin@oficina.com}
     admin-password: ${SEED_ADMIN_PASSWORD:Admin@123}
+  mail:
+    from: ${MAIL_FROM:${MAIL_USERNAME:no-reply@oficina.com}}
