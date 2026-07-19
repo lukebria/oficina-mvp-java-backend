@@ -54,8 +54,8 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
 
     @Override
     @Transactional(readOnly = true)
-    public List<ServiceOrder> list() {
-        return serviceOrders.findAll();
+    public List<ServiceOrder> list(boolean all) {
+        return all ? serviceOrders.findAll() : serviceOrders.findActiveOrderedByStatusPriority();
     }
 
     @Override
@@ -118,11 +118,13 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
 
     @Override
     @Transactional
-    public ServiceOrder approve(Long id, String comment) {
+    public ServiceOrder decideApproval(Long id, boolean approved, String comment) {
         var order = findEntity(id);
-        validateStock(order);
-        decrementStock(order);
-        order.approve(comment);
+        if (approved) {
+            validateStock(order);
+            decrementStock(order);
+        }
+        order.decideApproval(approved, comment);
         return order;
     }
 
@@ -156,7 +158,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
 
     @Override
     @Transactional
-    public ServiceOrder approveByCustomer(String code, String document, String comment) {
+    public ServiceOrder decideApprovalByCustomer(String code, String document, boolean approved, String comment) {
         var normalizedDocument = DocumentValidator.normalize(document);
         var order = serviceOrders.findByCode(code)
                 .orElseThrow(() -> new BusinessException("Ordem de serviço não encontrada.", HttpStatus.NOT_FOUND));
@@ -169,9 +171,13 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
             throw new BusinessException("Esta OS não está aguardando aprovação do cliente.", HttpStatus.BAD_REQUEST);
         }
 
-        validateStock(order);
-        decrementStock(order);
-        order.approve(comment == null ? "Orçamento aprovado pelo cliente. OS enviada para execução." : comment);
+        if (approved) {
+            validateStock(order);
+            decrementStock(order);
+            order.decideApproval(true, comment == null ? "Orçamento aprovado pelo cliente. OS enviada para execução." : comment);
+        } else {
+            order.decideApproval(false, comment == null ? "Orçamento recusado pelo cliente." : comment);
+        }
         return order;
     }
 

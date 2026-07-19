@@ -8,6 +8,10 @@ import java.util.Optional;
 public interface ServiceOrderRepositoryPort {
     List<ServiceOrder> findAll();
 
+    // Ordenada por prioridade de status (EM_EXECUCAO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA, mais
+    // antigas primeiro), excluindo OS em estado terminal (FINALIZADA, ENTREGUE, RECUSADA).
+    List<ServiceOrder> findActiveOrderedByStatusPriority();
+
     Optional<ServiceOrder> findById(Long id);
 
     Optional<ServiceOrder> findByCode(String code);

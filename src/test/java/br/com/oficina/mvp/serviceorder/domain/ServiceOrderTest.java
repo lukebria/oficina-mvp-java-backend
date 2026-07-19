@@ -62,7 +62,7 @@ class ServiceOrderTest {
         var order = new ServiceOrder("OS-004", customer, vehicle, null);
         order.markBudgetWaitingApproval();
 
-        order.approve("Cliente aprovou o orçamento");
+        order.decideApproval(true, "Cliente aprovou o orçamento");
 
         assertThat(order.getStatus()).isEqualTo(ServiceOrderStatus.EM_EXECUCAO);
         assertThat(order.getApprovedAt()).isNotNull();
@@ -74,11 +74,35 @@ class ServiceOrderTest {
         var order = new ServiceOrder("OS-005", customer, vehicle, null);
         order.markBudgetWaitingApproval();
 
-        order.approve("  ");
+        order.decideApproval(true, "  ");
 
         assertThat(order.getHistory()).anyMatch(h ->
                 h.getStatus() == ServiceOrderStatus.EM_EXECUCAO
                         && h.getComment().contains("Orçamento aprovado"));
+    }
+
+    @Test
+    void shouldRejectOrder() {
+        var order = new ServiceOrder("OS-004B", customer, vehicle, null);
+        order.markBudgetWaitingApproval();
+
+        order.decideApproval(false, "Cliente recusou o orçamento");
+
+        assertThat(order.getStatus()).isEqualTo(ServiceOrderStatus.RECUSADA);
+        assertThat(order.getApprovedAt()).isNull();
+        assertThat(order.getStartedAt()).isNull();
+    }
+
+    @Test
+    void shouldRejectWithDefaultCommentWhenBlank() {
+        var order = new ServiceOrder("OS-005B", customer, vehicle, null);
+        order.markBudgetWaitingApproval();
+
+        order.decideApproval(false, "  ");
+
+        assertThat(order.getHistory()).anyMatch(h ->
+                h.getStatus() == ServiceOrderStatus.RECUSADA
+                        && h.getComment().contains("Orçamento recusado"));
     }
 
     @Test

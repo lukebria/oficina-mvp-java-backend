@@ -91,11 +91,11 @@ conceito-a-conceito com um backend TS/Node equivalente.
 | `GET /api/service-orders`                                | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `POST /api/service-orders`                               | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `GET /api/service-orders/{id}`                           | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
-| `PATCH /api/service-orders/{id}/approve`                 | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
+| `PATCH /api/service-orders/{id}/approval`                | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `PATCH /api/service-orders/{id}/status`                  | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `PATCH /api/service-orders/{id}/diagnosis`               | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `GET /api/public/service-orders/{code}?document=...`     | `serviceorder.adapter.in.web.PublicServiceOrderController`    | `serviceorder.application.ServiceOrderService`               | Pública      |
-| `POST /api/public/service-orders/{code}/approve`         | `serviceorder.adapter.in.web.PublicServiceOrderController`    | `serviceorder.application.ServiceOrderService`               | Pública      |
+| `POST /api/public/service-orders/{code}/approval`        | `serviceorder.adapter.in.web.PublicServiceOrderController`    | `serviceorder.application.ServiceOrderService`               | Pública      |
 | `GET /api/reports/average-execution-time`                | `report.adapter.in.web.ReportController`                      | `report.application.ReportService`                           | JWT          |
 | `GET /api/health`                                        | `shared.api.HealthController`                                 | —                                                             | Pública      |
 | `GET /actuator/health`                                   | Actuator                                                       | —                                                             | Pública      |
@@ -174,10 +174,10 @@ diretamente; tudo passa pela porta (`*RepositoryPort`).
 
 | Etapa                     | Implementação Java                                                    |
 |----------------------------|---------------------------------------------------------------------------|
-| Aprovar orçamento         | `ServiceOrderService.approve` (admin) ou `.approveByCustomer` (público)  |
+| Decidir aprovação/recusa   | `ServiceOrderService.decideApproval` (admin) ou `.decideApprovalByCustomer` (público) |
 | Verificar disponibilidade | `ServiceOrderService.validateStock`                                      |
 | Baixar estoque             | `ServiceOrderService.decrementStock` + `Part.decrementStock`             |
-| Mudar status               | `ServiceOrder.approve`                                                    |
+| Mudar status               | `ServiceOrder.decideApproval`                                             |
 | Registrar histórico        | `ServiceOrderStatusHistory`                                               |
 
 ### 6.4 Relatório

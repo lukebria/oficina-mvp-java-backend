@@ -11,10 +11,11 @@ public final class ServiceOrderStatusPolicy {
     private static final Map<ServiceOrderStatus, List<ServiceOrderStatus>> ALLOWED = Map.of(
             ServiceOrderStatus.RECEBIDA, List.of(ServiceOrderStatus.EM_DIAGNOSTICO, ServiceOrderStatus.AGUARDANDO_APROVACAO),
             ServiceOrderStatus.EM_DIAGNOSTICO, List.of(ServiceOrderStatus.AGUARDANDO_APROVACAO),
-            ServiceOrderStatus.AGUARDANDO_APROVACAO, List.of(ServiceOrderStatus.EM_EXECUCAO),
+            ServiceOrderStatus.AGUARDANDO_APROVACAO, List.of(ServiceOrderStatus.EM_EXECUCAO, ServiceOrderStatus.RECUSADA),
             ServiceOrderStatus.EM_EXECUCAO, List.of(ServiceOrderStatus.FINALIZADA),
             ServiceOrderStatus.FINALIZADA, List.of(ServiceOrderStatus.ENTREGUE),
-            ServiceOrderStatus.ENTREGUE, List.of()
+            ServiceOrderStatus.ENTREGUE, List.of(),
+            ServiceOrderStatus.RECUSADA, List.of()
     );
 
     private ServiceOrderStatusPolicy() {}

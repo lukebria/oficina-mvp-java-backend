@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,9 +26,11 @@ public class ServiceOrderController {
     }
 
     @GetMapping
-    @Operation(summary = "Lista ordens de serviço")
-    public List<ServiceOrderResponseDto> list() {
-        return serviceOrderUseCase.list().stream().map(ServiceOrderResponseDto::from).toList();
+    @Operation(summary = "Lista ordens de serviço. Por padrão, lista apenas as ativas, ordenadas por prioridade de " +
+            "status (Em Execução > Aguardando Aprovação > Diagnóstico > Recebida, mais antigas primeiro) e excluindo " +
+            "Finalizada, Entregue e Recusada. Com all=true, lista todas as OS sem filtro nem ordenação especial.")
+    public List<ServiceOrderResponseDto> list(@RequestParam(defaultValue = "false") boolean all) {
+        return serviceOrderUseCase.list(all).stream().map(ServiceOrderResponseDto::from).toList();
     }
 
     @PostMapping
@@ -43,10 +46,10 @@ public class ServiceOrderController {
         return ServiceOrderResponseDto.from(serviceOrderUseCase.findById(id));
     }
 
-    @PatchMapping("/{id}/approve")
-    @Operation(summary = "Aprova orçamento da OS via fluxo administrativo")
-    public ServiceOrderResponseDto approve(@PathVariable Long id, @RequestBody(required = false) CustomerApprovalRequestDto request) {
-        return ServiceOrderResponseDto.from(serviceOrderUseCase.approve(id, request == null ? null : request.comment()));
+    @PatchMapping("/{id}/approval")
+    @Operation(summary = "Registra a decisão (aprovação ou recusa) do orçamento da OS via fluxo administrativo")
+    public ServiceOrderResponseDto decideApproval(@PathVariable Long id, @RequestBody @Valid ApprovalRequestDto request) {
+        return ServiceOrderResponseDto.from(serviceOrderUseCase.decideApproval(id, request.approved(), request.comment()));
     }
 
     @PatchMapping("/{id}/status")

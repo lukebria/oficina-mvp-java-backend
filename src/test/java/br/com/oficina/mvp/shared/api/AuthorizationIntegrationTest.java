@@ -112,11 +112,11 @@ class AuthorizationIntegrationTest {
         order.markBudgetWaitingApproval();
         var saved = serviceOrders.save(order);
 
-        mvc.perform(patch("/api/service-orders/" + saved.getId() + "/approve").header("Authorization", "Bearer " + attendantToken)
-                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+        mvc.perform(patch("/api/service-orders/" + saved.getId() + "/approval").header("Authorization", "Bearer " + attendantToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"approved\": true}"))
                 .andExpect(status().isForbidden());
-        mvc.perform(patch("/api/service-orders/" + saved.getId() + "/approve").header("Authorization", "Bearer " + mechanicToken)
-                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+        mvc.perform(patch("/api/service-orders/" + saved.getId() + "/approval").header("Authorization", "Bearer " + mechanicToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"approved\": true}"))
                 .andExpect(status().isOk());
     }
 

@@ -287,7 +287,7 @@ Além da autenticação, `SecurityConfig` aplica autorização granular por rota
 | `/api/parts/{id}`                                   | DELETE | ADMIN                      |
 | `/api/service-orders`, `/api/service-orders/{id}`   | GET    | ADMIN, MECHANIC, ATTENDANT |
 | `/api/service-orders`                               | POST   | ADMIN, MECHANIC, ATTENDANT |
-| `/api/service-orders/{id}/approve`                  | PATCH  | ADMIN, MECHANIC            |
+| `/api/service-orders/{id}/approval`                 | PATCH  | ADMIN, MECHANIC            |
 | `/api/service-orders/{id}/status`                   | PATCH  | ADMIN, MECHANIC            |
 | `/api/service-orders/{id}/diagnosis`                | PATCH  | ADMIN, MECHANIC            |
 | `/api/reports/average-execution-time`               | GET    | ADMIN                      |
@@ -395,15 +395,39 @@ POST /api/service-orders
 Observação: os preços de serviços e peças são copiados para `WorkOrderService` e `WorkOrderPart` no momento da criação.
 Assim, alterações futuras no catálogo ou no preço da peça não mudam o orçamento já gerado.
 
-### 7.3 Aprovação administrativa da OS
+### 7.2b Listagem de OS
 
 ```txt
-PATCH /api/service-orders/{id}/approve
+GET /api/service-orders?all={boolean, default false}
+  -> ServiceOrderController.list
+  -> ServiceOrderService.list(all) (implementa ServiceOrderUseCase)
+  -> se all=false: ServiceOrderRepositoryPort.findActiveOrderedByStatusPriority
+       -> ServiceOrderJpaRepository.findActiveOrderedByStatusPriority (@Query JPQL com CASE por status)
+  -> se all=true: ServiceOrderRepositoryPort.findAll (sem filtro nem ordenação especial)
+```
+
+Com `all=false` (padrão), filtra `status NOT IN (FINALIZADA, ENTREGUE, RECUSADA)` — exclusão apenas da listagem (não
+física; essas OS continuam acessíveis via `GET /api/service-orders/{id}` ou via `all=true`) — e ordena por:
+
+```txt
+EM_EXECUCAO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA, created_at ASC dentro de cada status
+```
+
+`ServiceOrderRepositoryPort.findAll()` também é usado separadamente por `ReportService` para o relatório de tempo
+médio de execução, que precisa enxergar OS finalizadas independente do parâmetro `all` da listagem.
+
+### 7.3 Decisão administrativa sobre o orçamento da OS
+
+```txt
+PATCH /api/service-orders/{id}/approval
   -> busca OS
-  -> valida estoque das peças
-  -> decrementa estoque
-  -> transiciona AGUARDANDO_APROVACAO -> EM_EXECUCAO
-  -> preenche approvedAt e startedAt
+  -> se approved=true:
+       -> valida estoque das peças
+       -> decrementa estoque
+       -> transiciona AGUARDANDO_APROVACAO -> EM_EXECUCAO
+       -> preenche approvedAt e startedAt
+  -> se approved=false:
+       -> transiciona AGUARDANDO_APROVACAO -> RECUSADA
   -> registra histórico
 ```
 
@@ -420,18 +444,17 @@ GET /api/public/service-orders/{code}?document=<cpf-ou-cnpj>
   -> retorna visão pública da OS
 ```
 
-Aprovação pública:
+Decisão pública sobre o orçamento:
 
 ```txt
-POST /api/public/service-orders/{code}/approve
-  -> PublicServiceOrderController.approve
-  -> ServiceOrderService.approveByCustomer
+POST /api/public/service-orders/{code}/approval
+  -> PublicServiceOrderController.decideApproval
+  -> ServiceOrderService.decideApprovalByCustomer
   -> normaliza document
   -> valida se o documento pertence ao cliente
   -> exige status AGUARDANDO_APROVACAO
-  -> valida estoque
-  -> decrementa estoque
-  -> muda status para EM_EXECUCAO
+  -> se approved=true: valida estoque, decrementa estoque, muda status para EM_EXECUCAO
+  -> se approved=false: muda status para RECUSADA
   -> registra histórico
 ```
 
@@ -453,9 +476,11 @@ RECEBIDA -> EM_DIAGNOSTICO
 RECEBIDA -> AGUARDANDO_APROVACAO
 EM_DIAGNOSTICO -> AGUARDANDO_APROVACAO
 AGUARDANDO_APROVACAO -> EM_EXECUCAO
+AGUARDANDO_APROVACAO -> RECUSADA
 EM_EXECUCAO -> FINALIZADA
 FINALIZADA -> ENTREGUE
 ENTREGUE -> sem próximas transições
+RECUSADA -> sem próximas transições
 ```
 
 Timestamps preenchidos no domínio:
