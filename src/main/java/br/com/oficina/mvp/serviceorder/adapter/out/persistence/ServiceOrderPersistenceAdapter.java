@@ -22,6 +22,11 @@ class ServiceOrderPersistenceAdapter implements ServiceOrderRepositoryPort {
     }
 
     @Override
+    public List<ServiceOrder> findActiveOrderedByStatusPriority() {
+        return jpaRepository.findActiveOrderedByStatusPriority().stream().map(this::initialize).toList();
+    }
+
+    @Override
     public Optional<ServiceOrder> findById(Long id) {
         return jpaRepository.findById(id).map(this::initialize);
     }

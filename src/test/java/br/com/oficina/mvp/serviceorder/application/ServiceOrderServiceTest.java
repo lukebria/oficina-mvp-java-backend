@@ -8,6 +8,7 @@ import br.com.oficina.mvp.shared.domain.ServiceOrderStatus;
 import br.com.oficina.mvp.part.application.port.out.PartRepositoryPort;
 import br.com.oficina.mvp.part.domain.Part;
 import br.com.oficina.mvp.serviceorder.application.port.in.CreateServiceOrderCommand;
+import br.com.oficina.mvp.serviceorder.application.port.out.ServiceOrderNotificationPort;
 import br.com.oficina.mvp.serviceorder.application.port.out.ServiceOrderRepositoryPort;
 import br.com.oficina.mvp.serviceorder.domain.ServiceOrder;
 import br.com.oficina.mvp.serviceorder.domain.WorkOrderPart;
@@ -30,6 +31,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +49,8 @@ class ServiceOrderServiceTest {
     CatalogRepositoryPort catalog;
     @Mock
     PartRepositoryPort parts;
+    @Mock
+    ServiceOrderNotificationPort notifications;
 
     @InjectMocks
     ServiceOrderService service;
@@ -65,11 +71,19 @@ class ServiceOrderServiceTest {
     }
 
     @Test
-    void shouldListOrders() {
+    void shouldListActiveOrdersByDefault() {
+        var order = new ServiceOrder("OS-001", customer, vehicle, null);
+        when(serviceOrders.findActiveOrderedByStatusPriority()).thenReturn(List.of(order));
+
+        assertThat(service.list(false)).hasSize(1);
+    }
+
+    @Test
+    void shouldListAllOrdersWhenAllIsTrue() {
         var order = new ServiceOrder("OS-001", customer, vehicle, null);
         when(serviceOrders.findAll()).thenReturn(List.of(order));
 
-        assertThat(service.list()).hasSize(1);
+        assertThat(service.list(true)).hasSize(1);
     }
 
     @Test
@@ -110,6 +124,7 @@ class ServiceOrderServiceTest {
 
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.AGUARDANDO_APROVACAO);
         assertThat(result.getCode()).startsWith("OS-");
+        verify(notifications, times(1)).notifyStatusChanged(result);
     }
 
     @Test
@@ -200,10 +215,11 @@ class ServiceOrderServiceTest {
         ReflectionTestUtils.setField(order, "id", 1L);
         when(serviceOrders.findById(1L)).thenReturn(Optional.of(order));
 
-        var result = service.approve(1L, "Aprovado");
+        var result = service.decideApproval(1L, true, "Aprovado");
 
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.EM_EXECUCAO);
         assertThat(part.getStockQuantity()).isEqualTo(8);
+        verify(notifications, times(1)).notifyStatusChanged(result);
     }
 
     @Test
@@ -215,9 +231,23 @@ class ServiceOrderServiceTest {
         ReflectionTestUtils.setField(order, "id", 1L);
         when(serviceOrders.findById(1L)).thenReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> service.approve(1L, "Aprovado"))
+        assertThatThrownBy(() -> service.decideApproval(1L, true, "Aprovado"))
                 .isInstanceOfSatisfying(BusinessException.class, ex ->
                         assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT));
+    }
+
+    @Test
+    void shouldRejectOrderWithoutTouchingStock() {
+        var order = orderWaitingApproval();
+        order.addPart(new WorkOrderPart(part, 2));
+        ReflectionTestUtils.setField(order, "id", 1L);
+        when(serviceOrders.findById(1L)).thenReturn(Optional.of(order));
+
+        var result = service.decideApproval(1L, false, "Cliente recusou o orçamento");
+
+        assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.RECUSADA);
+        assertThat(part.getStockQuantity()).isEqualTo(10);
+        verify(notifications, never()).notifyStatusChanged(any());
     }
 
     @Test
@@ -229,6 +259,19 @@ class ServiceOrderServiceTest {
         var result = service.updateStatus(1L, ServiceOrderStatus.EM_DIAGNOSTICO, "Diagnóstico");
 
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.EM_DIAGNOSTICO);
+        verify(notifications, times(1)).notifyStatusChanged(result);
+    }
+
+    @Test
+    void shouldNotNotifyWhenUpdateStatusTargetsRecusada() {
+        var order = orderWaitingApproval();
+        ReflectionTestUtils.setField(order, "id", 1L);
+        when(serviceOrders.findById(1L)).thenReturn(Optional.of(order));
+
+        var result = service.updateStatus(1L, ServiceOrderStatus.RECUSADA, "Cliente recusou");
+
+        assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.RECUSADA);
+        verify(notifications, never()).notifyStatusChanged(any());
     }
 
     @Test
@@ -276,9 +319,23 @@ class ServiceOrderServiceTest {
         var order = orderWaitingApproval();
         when(serviceOrders.findByCode("OS-PUBLIC")).thenReturn(Optional.of(order));
 
-        var result = service.approveByCustomer("OS-PUBLIC", "529.982.247-25", null);
+        var result = service.decideApprovalByCustomer("OS-PUBLIC", "529.982.247-25", true, null);
 
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.EM_EXECUCAO);
+        verify(notifications, times(1)).notifyStatusChanged(result);
+    }
+
+    @Test
+    void shouldRejectByCustomerWithoutTouchingStock() {
+        var order = orderWaitingApproval();
+        order.addPart(new WorkOrderPart(part, 2));
+        when(serviceOrders.findByCode("OS-PUBLIC")).thenReturn(Optional.of(order));
+
+        var result = service.decideApprovalByCustomer("OS-PUBLIC", "529.982.247-25", false, "Cliente recusou o orçamento");
+
+        assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.RECUSADA);
+        assertThat(part.getStockQuantity()).isEqualTo(10);
+        verify(notifications, never()).notifyStatusChanged(any());
     }
 
     @Test
@@ -286,7 +343,7 @@ class ServiceOrderServiceTest {
         var order = orderWaitingApproval();
         when(serviceOrders.findByCode("OS-PUBLIC")).thenReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> service.approveByCustomer("OS-PUBLIC", "111.111.111-11", null))
+        assertThatThrownBy(() -> service.decideApprovalByCustomer("OS-PUBLIC", "111.111.111-11", true, null))
                 .isInstanceOfSatisfying(BusinessException.class, ex ->
                         assertThat(ex.getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
     }
@@ -296,7 +353,7 @@ class ServiceOrderServiceTest {
         var order = new ServiceOrder("OS-PUBLIC", customer, vehicle, null);
         when(serviceOrders.findByCode("OS-PUBLIC")).thenReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> service.approveByCustomer("OS-PUBLIC", "529.982.247-25", null))
+        assertThatThrownBy(() -> service.decideApprovalByCustomer("OS-PUBLIC", "529.982.247-25", true, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("aguardando aprovação");
     }
@@ -337,7 +394,7 @@ class ServiceOrderServiceTest {
         var order = orderWaitingApproval();
         when(serviceOrders.findByCode("OS-PUBLIC")).thenReturn(Optional.of(order));
 
-        var result = service.approveByCustomer("OS-PUBLIC", "529.982.247-25", "Aprovado via portal");
+        var result = service.decideApprovalByCustomer("OS-PUBLIC", "529.982.247-25", true, "Aprovado via portal");
 
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.EM_EXECUCAO);
     }
@@ -346,7 +403,7 @@ class ServiceOrderServiceTest {
     void shouldRejectCustomerApprovalWhenOrderNotFound() {
         when(serviceOrders.findByCode("INEXISTENTE")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.approveByCustomer("INEXISTENTE", "529.982.247-25", null))
+        assertThatThrownBy(() -> service.decideApprovalByCustomer("INEXISTENTE", "529.982.247-25", true, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("não encontrada");
     }

@@ -59,7 +59,7 @@ conceito-a-conceito com um backend TS/Node equivalente.
 | `vehicle`                 | Cadastro de veículos e validação de placa                     | `VehicleController`, `VehicleUseCase`, `VehicleCommand`, `VehicleService`, `VehicleRepositoryPort`, `Vehicle`, `VehicleRequestDto`, `VehicleResponseDto`     |
 | `catalog`                 | Catálogo de serviços da oficina                                | `CatalogController`, `CatalogUseCase`, `CatalogCommand`, `CatalogService`, `CatalogRepositoryPort`, `ServiceCatalogItem`, `ServiceCatalogItemRequestDto`, `ServiceCatalogItemResponseDto` |
 | `part`                    | Peças/insumos e estoque                                       | `PartController`, `PartUseCase`, `PartCommand`, `PartService`, `PartRepositoryPort`, `Part`, `PartRequestDto`, `PartResponseDto`                             |
-| `serviceorder`            | Ordem de serviço, orçamento, aprovação, status e histórico     | `ServiceOrderController`, `PublicServiceOrderController`, `ServiceOrderUseCase`, `PublicServiceOrderUseCase`, `CreateServiceOrderCommand`, `ServiceOrderService`, `ServiceOrderRepositoryPort`, `ServiceOrder`, `WorkOrderService`, `WorkOrderPart`, `WorkOrderLineItem`, `ServiceOrderStatusHistory`, `ServiceOrderStatusPolicy` |
+| `serviceorder`            | Ordem de serviço, orçamento, aprovação, status e histórico     | `ServiceOrderController`, `PublicServiceOrderController`, `ServiceOrderUseCase`, `PublicServiceOrderUseCase`, `CreateServiceOrderCommand`, `ServiceOrderService`, `ServiceOrderRepositoryPort`, `ServiceOrderNotificationPort`, `ServiceOrderStatusNotificationAdapter`, `ServiceOrder`, `WorkOrderService`, `WorkOrderPart`, `WorkOrderLineItem`, `ServiceOrderStatusHistory`, `ServiceOrderStatusPolicy` |
 | `report`                  | Tempo médio de execução (só leitura, sem `domain` próprio)     | `ReportController`, `ReportUseCase`, `AverageExecutionTimeResult`, `ReportService` (lê via `ServiceOrderRepositoryPort` do módulo `serviceorder`), `AverageExecutionTimeResponseDto` |
 | `shared`                  | Vocabulário e infraestrutura transversal                       | `shared.domain.BaseEntity`, `shared.domain.Role`, `shared.domain.ServiceOrderStatus`, `SecurityConfig`, `JwtService`, `JwtAuthenticationFilter`, `GlobalExceptionHandler`, `ApiError`, `BusinessException`, `DocumentValidator`, `PlateValidator`, `DataSeeder`, `OpenApiConfig`, `shared.api.HealthController` |
 
@@ -91,11 +91,11 @@ conceito-a-conceito com um backend TS/Node equivalente.
 | `GET /api/service-orders`                                | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `POST /api/service-orders`                               | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `GET /api/service-orders/{id}`                           | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
-| `PATCH /api/service-orders/{id}/approve`                 | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
+| `PATCH /api/service-orders/{id}/approval`                | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `PATCH /api/service-orders/{id}/status`                  | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `PATCH /api/service-orders/{id}/diagnosis`               | `serviceorder.adapter.in.web.ServiceOrderController`          | `serviceorder.application.ServiceOrderService`               | JWT          |
 | `GET /api/public/service-orders/{code}?document=...`     | `serviceorder.adapter.in.web.PublicServiceOrderController`    | `serviceorder.application.ServiceOrderService`               | Pública      |
-| `POST /api/public/service-orders/{code}/approve`         | `serviceorder.adapter.in.web.PublicServiceOrderController`    | `serviceorder.application.ServiceOrderService`               | Pública      |
+| `POST /api/public/service-orders/{code}/approval`        | `serviceorder.adapter.in.web.PublicServiceOrderController`    | `serviceorder.application.ServiceOrderService`               | Pública      |
 | `GET /api/reports/average-execution-time`                | `report.adapter.in.web.ReportController`                      | `report.application.ReportService`                           | JWT          |
 | `GET /api/health`                                        | `shared.api.HealthController`                                 | —                                                             | Pública      |
 | `GET /actuator/health`                                   | Actuator                                                       | —                                                             | Pública      |
@@ -169,16 +169,18 @@ diretamente; tudo passa pela porta (`*RepositoryPort`).
 | Calcular orçamento      | `ServiceOrder.recalculateTotals`                                              |
 | Enviar para aprovação   | `ServiceOrder.markBudgetWaitingApproval`                                      |
 | Persistir agregado      | `ServiceOrderRepositoryPort.save` com cascade                                 |
+| Notificar cliente        | `ServiceOrderNotificationPort.notifyStatusChanged` (status resultante nunca é `RECUSADA` aqui) |
 
 ### 6.3 Aprovação e estoque
 
 | Etapa                     | Implementação Java                                                    |
 |----------------------------|---------------------------------------------------------------------------|
-| Aprovar orçamento         | `ServiceOrderService.approve` (admin) ou `.approveByCustomer` (público)  |
+| Decidir aprovação/recusa   | `ServiceOrderService.decideApproval` (admin) ou `.decideApprovalByCustomer` (público) |
 | Verificar disponibilidade | `ServiceOrderService.validateStock`                                      |
 | Baixar estoque             | `ServiceOrderService.decrementStock` + `Part.decrementStock`             |
-| Mudar status               | `ServiceOrder.approve`                                                    |
+| Mudar status               | `ServiceOrder.decideApproval`                                             |
 | Registrar histórico        | `ServiceOrderStatusHistory`                                               |
+| Notificar cliente          | `ServiceOrderNotificationPort.notifyStatusChanged`, só quando `approved=true` |
 
 ### 6.4 Relatório
 

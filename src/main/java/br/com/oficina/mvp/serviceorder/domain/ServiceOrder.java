@@ -101,14 +101,21 @@ public class ServiceOrder extends BaseEntity {
         addHistory(ServiceOrderStatus.AGUARDANDO_APROVACAO, "Orçamento gerado automaticamente e enviado para aprovação.");
     }
 
-    public void approve(String comment) {
-        ServiceOrderStatusPolicy.assertTransition(this.status, ServiceOrderStatus.EM_EXECUCAO);
-        var now = OffsetDateTime.now();
-        this.status = ServiceOrderStatus.EM_EXECUCAO;
-        this.approvedAt = now;
-        this.startedAt = now;
-        addHistory(ServiceOrderStatus.EM_EXECUCAO,
-                comment == null || comment.isBlank() ? "Orçamento aprovado. Execução iniciada." : comment);
+    public void decideApproval(boolean approved, String comment) {
+        if (approved) {
+            ServiceOrderStatusPolicy.assertTransition(this.status, ServiceOrderStatus.EM_EXECUCAO);
+            var now = OffsetDateTime.now();
+            this.status = ServiceOrderStatus.EM_EXECUCAO;
+            this.approvedAt = now;
+            this.startedAt = now;
+            addHistory(ServiceOrderStatus.EM_EXECUCAO,
+                    comment == null || comment.isBlank() ? "Orçamento aprovado. Execução iniciada." : comment);
+        } else {
+            ServiceOrderStatusPolicy.assertTransition(this.status, ServiceOrderStatus.RECUSADA);
+            this.status = ServiceOrderStatus.RECUSADA;
+            addHistory(ServiceOrderStatus.RECUSADA,
+                    comment == null || comment.isBlank() ? "Orçamento recusado." : comment);
+        }
     }
 
     public void updateDiagnosis(String diagnosis) {

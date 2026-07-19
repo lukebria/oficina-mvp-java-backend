@@ -6,5 +6,6 @@ public enum ServiceOrderStatus {
     AGUARDANDO_APROVACAO,
     EM_EXECUCAO,
     FINALIZADA,
-    ENTREGUE
+    ENTREGUE,
+    RECUSADA
 }

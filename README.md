@@ -289,7 +289,7 @@ aplicado via `hasRole`/`hasAnyRole` em `SecurityConfig`. Fora dessa lista, qualq
 | `/api/parts/{id}`                             | DELETE | ADMIN                      |
 | `/api/service-orders`, `/api/service-orders/{id}` | GET | ADMIN, MECHANIC, ATTENDANT |
 | `/api/service-orders`                         | POST   | ADMIN, MECHANIC, ATTENDANT |
-| `/api/service-orders/{id}/approve`            | PATCH  | ADMIN, MECHANIC            |
+| `/api/service-orders/{id}/approval`           | PATCH  | ADMIN, MECHANIC            |
 | `/api/service-orders/{id}/status`             | PATCH  | ADMIN, MECHANIC            |
 | `/api/service-orders/{id}/diagnosis`          | PATCH  | ADMIN, MECHANIC            |
 | `/api/reports/average-execution-time`         | GET    | ADMIN                      |
@@ -351,7 +351,7 @@ DELETE /api/parts/{id}
 GET   /api/service-orders
 POST  /api/service-orders
 GET   /api/service-orders/{id}
-PATCH /api/service-orders/{id}/approve
+PATCH /api/service-orders/{id}/approval
 PATCH /api/service-orders/{id}/status
 PATCH /api/service-orders/{id}/diagnosis
 ```
@@ -360,7 +360,7 @@ PATCH /api/service-orders/{id}/diagnosis
 
 ```http
 GET  /api/public/service-orders/{code}?document=12345678909
-POST /api/public/service-orders/{code}/approve
+POST /api/public/service-orders/{code}/approval
 ```
 
 ### Relatórios
@@ -469,22 +469,46 @@ Ao criar a OS, o sistema:
 7. cria histórico;
 8. coloca a OS em `AGUARDANDO_APROVACAO`.
 
-### Aprovar OS pelo fluxo administrativo
+### Listar ordens de serviço
 
 ```http
-PATCH /api/service-orders/1/approve
+GET /api/service-orders
+Authorization: Bearer <token>
+```
+
+Por padrão (`all` ausente ou `false`), retorna apenas OS ativas (exclui `FINALIZADA`, `ENTREGUE` e `RECUSADA` da
+listagem — sem exclusão física, elas continuam acessíveis via `GET /api/service-orders/{id}`), ordenadas por
+prioridade de status e, dentro de cada status, pelas mais antigas primeiro:
+
+```txt
+EM_EXECUCAO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA
+```
+
+```http
+GET /api/service-orders?all=true
+Authorization: Bearer <token>
+```
+
+Com `all=true`, retorna todas as OS (incluindo `FINALIZADA`, `ENTREGUE` e `RECUSADA`), sem o filtro nem a
+ordenação especial.
+
+### Decidir aprovação do orçamento pelo fluxo administrativo
+
+```http
+PATCH /api/service-orders/1/approval
 Content-Type: application/json
 Authorization: Bearer <token>
 ```
 
 ```json
 {
-  "document": "12345678909",
+  "approved": true,
   "comment": "Orçamento aprovado pelo atendimento."
 }
 ```
 
-No fluxo administrativo, o service usa apenas o `comment`; o documento não é validado nesse endpoint.
+`approved: false` transiciona a OS para `RECUSADA` em vez de `EM_EXECUCAO`. Quando aprovado, o estoque das peças é
+validado e decrementado; quando recusado, o estoque não é tocado.
 
 ### Atualizar status da OS
 
@@ -521,19 +545,22 @@ Authorization: Bearer <token>
 GET /api/public/service-orders/OS-20260101-12345?document=12345678909
 ```
 
-### Aprovar OS publicamente
+### Decidir aprovação do orçamento publicamente
 
 ```http
-POST /api/public/service-orders/OS-20260101-12345/approve
+POST /api/public/service-orders/OS-20260101-12345/approval
 Content-Type: application/json
 ```
 
 ```json
 {
   "document": "12345678909",
+  "approved": true,
   "comment": "Aprovado pelo cliente."
 }
 ```
+
+`approved: false` recusa o orçamento (status vai para `RECUSADA`); a OS precisa estar em `AGUARDANDO_APROVACAO`.
 
 ## Fluxo de status da OS
 
@@ -544,6 +571,7 @@ RECEBIDA -> EM_DIAGNOSTICO
 RECEBIDA -> AGUARDANDO_APROVACAO
 EM_DIAGNOSTICO -> AGUARDANDO_APROVACAO
 AGUARDANDO_APROVACAO -> EM_EXECUCAO
+AGUARDANDO_APROVACAO -> RECUSADA
 EM_EXECUCAO -> FINALIZADA
 FINALIZADA -> ENTREGUE
 ```
@@ -558,6 +586,13 @@ Timestamps relevantes:
 | `startedAt`   | Ao aprovar orçamento ou entrar em `EM_EXECUCAO` |
 | `finalizedAt` | Ao entrar em `FINALIZADA`                       |
 | `deliveredAt` | Ao entrar em `ENTREGUE`                         |
+
+## Notificação de mudança de status
+
+Toda vez que o status da OS muda (na criação, na aprovação, ou via `PATCH /{id}/status`), o cliente é notificado por
+e-mail — **exceto** quando o novo status é `RECUSADA`. Nesta primeira etapa do MVP, a notificação apenas é logada
+(sem envio real de e-mail); veja `ServiceOrderNotificationPort` / `ServiceOrderStatusNotificationAdapter` e a
+seção 7.7 de `docs/architecture.md` para detalhes.
 
 ## Banco de dados
 
