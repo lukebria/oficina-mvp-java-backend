@@ -10,6 +10,11 @@ spring:
     hibernate:
       ddl-auto: create-drop
     open-in-view: false
+  mail:
+    host: 127.0.0.1
+    port: 1
+    username:
+    password:
 
 app:
   jwt:
