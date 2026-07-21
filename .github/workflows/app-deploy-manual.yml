@@ -1,0 +1,142 @@
+name: Application CI/CD - Build & Deploy to EKS
+
+# Disparo EXCLUSIVAMENTE MANUAL via interface do GitHub Actions
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente de Deploy'
+        required: true
+        default: 'lab'
+        type: choice
+        options:
+          - lab
+
+jobs:
+  # ==========================================
+  # JOB 1: TEST
+  # Executa os testes unitários/integração Java com Maven
+  # ==========================================
+  test:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Run Maven Tests
+        run: mvn clean test
+
+  # ==========================================
+  # JOB 2: BUILD
+  # Compila a aplicação e valida o pacote JAR
+  # ==========================================
+  build:
+    name: 📦 Build Application Package
+    runs-on: ubuntu-latest
+    needs: test # Só roda se os testes passarem
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Package JAR with Maven
+        run: mvn clean package -DskipTests
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: target/*.jar
+          retention-days: 1
+
+  # ==========================================
+  # JOB 3: PUSH
+  # Constrói a imagem Docker e faz o Push para o AWS ECR
+  # ==========================================
+  push:
+    name: 🐳 Build & Push Docker Image to ECR
+    runs-on: ubuntu-latest
+    needs: build # Só roda se o build passar
+    outputs:
+      ecr_registry: ${{ steps.login-ecr.outputs.registry }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_DEFAULT_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag and Push Image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: oficina-mecnica-lab
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+  # ==========================================
+  # JOB 4: DEPLOY
+  # Conecta no EKS e aplica os manifestos Kubernetes
+  # ==========================================
+  deploy:
+    name: 🚀 Deploy to AWS EKS
+    runs-on: ubuntu-latest
+    needs: push # Só roda se o push no ECR passar
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_DEFAULT_REGION }}
+
+      - name: Update Kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig --name oficina-mecnica-lab-cluster --region ${{ vars.AWS_DEFAULT_REGION }}
+
+      - name: Substitute Image URL & Apply K8s Manifests
+        env:
+          ECR_REGISTRY: ${{ needs.push.outputs.ecr_registry }}
+          ECR_REPOSITORY: oficina-mecnica-lab
+        run: |
+          # Substitui a placeholder ${ECR_REPOSITORY_URL} no arquivo de deployment pelo endpoint do ECR
+          sed -i "s|\${ECR_REPOSITORY_URL}|$ECR_REGISTRY/$ECR_REPOSITORY|g" k8s/03-app.yaml
+          
+          # Aplica os manifestos na ordem
+          kubectl apply -f k8s/01-config-secret.yaml
+          kubectl apply -f k8s/02-banco.yaml
+          kubectl apply -f k8s/03-app.yaml
