@@ -1,12 +1,12 @@
-name: "Application CI/CD - Build & Deploy to EKS"
+name: "Oficina APP - Build & Deploy"
 
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
     branches:
-      - main
+      - master
 
 jobs:
   build-and-deploy:
