@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.28.0/deployment-apps-v1.json
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,6 +19,16 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
+          # =========================================================
+          # ESSENCIAL PARA O HPA: Solicitação e Limite de Recursos
+          # =========================================================
+          resources:
+            requests:
+              cpu: "100m"      # 0.1 de um núcleo de CPU
+              memory: "256Mi"  # Memória inicial
+            limits:
+              cpu: "500m"      # Máximo de 0.5 de CPU
+              memory: "512Mi"  # Limite máximo de RAM
           env:
             - name: APP_PORT
               valueFrom:
@@ -90,6 +101,7 @@ spec:
                   name: app-config
                   key: MAIL_FROM
 ---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.28.0/service-v1.json
 apiVersion: v1
 kind: Service
 metadata:

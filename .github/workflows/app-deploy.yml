@@ -133,3 +133,4 @@ jobs:
           kubectl apply -f k8s/config-secret.yaml
           kubectl apply -f k8s/banco.yaml
           kubectl apply -f k8s/app.yaml
+          kubectl apply -f k8s/hpa.yaml
