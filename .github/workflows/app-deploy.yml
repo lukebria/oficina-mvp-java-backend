@@ -57,7 +57,7 @@ jobs:
           ECR_REPOSITORY: oficina-mecnica-lab
         run: |
           # Substitui ${ECR_REPOSITORY_URL} pela URL completa (ex: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/oficina-mecnica-lab)
-          sed -i "s|\${ECR_REPOSITORY_URL}|$ECR_REGISTRY/$ECR_REPOSITORY|g" k8s/03-app.yaml
+          sed -i "s|\${ECR_REPOSITORY_URL}|$ECR_REGISTRY/$ECR_REPOSITORY|g" k8s/app.yaml
           
           # Aplica todos os manifestos no cluster EKS
           kubectl apply -f k8s/
