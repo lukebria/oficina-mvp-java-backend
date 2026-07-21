@@ -1,0 +1,60 @@
+name: "Application CI/CD - Build & Deploy to EKS"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    name: "Build Image & Deploy to EKS"
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout do código
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 2: Configura credenciais AWS do Lab
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_DEFAULT_REGION }}
+
+      # Step 3: Autentica no Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Step 4: Build, Tag e Push da imagem Docker no ECR
+      - name: Build, Tag and Push Image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: oficina-mecnica-lab # Nome do repositório no ECR
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Gera a tag com o hash do commit e a tag 'latest'
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "ECR_IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:latest" >> $GITHUB_ENV
+
+      # Step 5: Configura o kubeconfig do EKS para o kubectl conseguir operar
+      - name: Update Kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig --name oficina-mecnica-lab-cluster --region ${{ vars.AWS_DEFAULT_REGION }}
+
+      # Step 6: Substitui a URL real da imagem no manifesto k8s e aplica tudo
+      - name: Deploy to EKS Cluster
+        run: |
+          # Substitui a variavel no arquivo k8s/app.yaml com a URL do ECR
+          sed -i "s|\${ECR_REPOSITORY_URL}|$ECR_REGISTRY/oficina-mecnica-lab|g" k8s/app.yaml
+          
+          # Aplica todos os manifestos
+          kubectl apply -f k8s/
