@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+      - master
   pull_request:
     branches:
       - main
+      - master
 
 jobs:
   build-and-deploy:
@@ -36,25 +38,26 @@ jobs:
       - name: Build, Tag and Push Image to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: oficina-mecnica-lab # Nome do repositório no ECR
+          ECR_REPOSITORY: oficina-mecnica-lab
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Gera a tag com o hash do commit e a tag 'latest'
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "ECR_IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:latest" >> $GITHUB_ENV
 
-      # Step 5: Configura o kubeconfig do EKS para o kubectl conseguir operar
+      # Step 5: Configura o kubeconfig do EKS
       - name: Update Kubeconfig for EKS
         run: |
           aws eks update-kubeconfig --name oficina-mecnica-lab-cluster --region ${{ vars.AWS_DEFAULT_REGION }}
 
       # Step 6: Substitui a URL real da imagem no manifesto k8s e aplica tudo
       - name: Deploy to EKS Cluster
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }} # Injeta o registry explicitamente neste Step!
+          ECR_REPOSITORY: oficina-mecnica-lab
         run: |
-          # Substitui a variavel no arquivo k8s/app.yaml com a URL do ECR
-          sed -i "s|\${ECR_REPOSITORY_URL}|$ECR_REGISTRY/oficina-mecnica-lab|g" k8s/app.yaml
+          # Substitui ${ECR_REPOSITORY_URL} pela URL completa (ex: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/oficina-mecnica-lab)
+          sed -i "s|\${ECR_REPOSITORY_URL}|$ECR_REGISTRY/$ECR_REPOSITORY|g" k8s/app.yaml
           
-          # Aplica todos os manifestos
+          # Aplica todos os manifestos no cluster EKS
           kubectl apply -f k8s/
