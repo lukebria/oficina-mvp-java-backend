@@ -33,20 +33,45 @@ jobs:
       - name: Run Unit Tests
         run: mvn clean test
         
+# ==========================================
+  # JOB 2: SONARQUBE / SONARCLOUD SCAN
+  # Roda a análise estática do código Java
+  # ==========================================
   sonarqube:
-    name: "2. Sonarqube"
-    needs: test
+    name: "2. SonarQube Scan"
+    needs: test # Só roda se os testes passarem
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v6
-      with:
-        # Disabling shallow clones is recommended for improving the relevancy of reporting
-        fetch-depth: 0
-    - name: SonarQube Scan
-      uses: SonarSource/sonarqube-scan-action@v8.2.1 # Ex: v4.1.0 or sha1, See the latest version at https://github.com/marketplace/actions/official-sonarqube-scan
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          # Recomendado pelo Sonar para histórico de blame e cobertura precisa
+          fetch-depth: 0
+
+      - name: Setup Java 21 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Run SonarQube Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io # Se for o SonarCloud oficial
+        run: |
+          mvn -B verify sonar:sonar \
+            -Dsonar.projectKey=oficina-mvp-java-backend \
+            -Dsonar.organization=marcioduques \
+            -Dsonar.host.url=https://sonarcloud.io
   # ==========================================
   # 2. JOB DE BUILD (Compilação do .jar)
   # ==========================================
