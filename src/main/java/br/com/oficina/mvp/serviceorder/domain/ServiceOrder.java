@@ -1,79 +1,32 @@
 package br.com.oficina.mvp.serviceorder.domain;
 
 import br.com.oficina.mvp.customer.domain.Customer;
+import br.com.oficina.mvp.shared.domain.BaseDomain;
 import br.com.oficina.mvp.shared.domain.ServiceOrderStatus;
-import br.com.oficina.mvp.shared.domain.BaseEntity;
 import br.com.oficina.mvp.vehicle.domain.Vehicle;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-@Entity
-@Table(name = "service_orders")
-public class ServiceOrder extends BaseEntity {
-    @Column(nullable = false, unique = true)
-    private String code;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "customer_id", nullable = false)
+public class ServiceOrder extends BaseDomain {
+    private final String code;
     private Customer customer;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private ServiceOrderStatus status = ServiceOrderStatus.RECEBIDA;
-
-    @Column(name = "customer_notes")
-    private String customerNotes;
-
+    private ServiceOrderStatus status;
+    private final String customerNotes;
     private String diagnosis;
-
-    @Column(name = "total_services", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalServices = BigDecimal.ZERO;
-
-    @Column(name = "total_parts", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalParts = BigDecimal.ZERO;
-
-    @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount = BigDecimal.ZERO;
-
-    @Column(name = "approved_at")
     private OffsetDateTime approvedAt;
-
-    @Column(name = "started_at")
     private OffsetDateTime startedAt;
-
-    @Column(name = "finalized_at")
     private OffsetDateTime finalizedAt;
-
-    @Column(name = "delivered_at")
     private OffsetDateTime deliveredAt;
-
-    @OneToMany(mappedBy = "serviceOrder", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<WorkOrderService> services = new ArrayList<>();
-
-    @OneToMany(mappedBy = "serviceOrder", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<WorkOrderPart> parts = new ArrayList<>();
-
-    @OneToMany(mappedBy = "serviceOrder", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<ServiceOrderStatusHistory> history = new ArrayList<>();
-
-    protected ServiceOrder() {}
+    private final List<WorkOrderService> services = new ArrayList<>();
+    private final List<WorkOrderPart> parts = new ArrayList<>();
+    private final List<ServiceOrderStatusHistory> history = new ArrayList<>();
 
     public ServiceOrder(String code, Customer customer, Vehicle vehicle, String customerNotes) {
         this.code = code;
@@ -82,6 +35,27 @@ public class ServiceOrder extends BaseEntity {
         this.customerNotes = customerNotes;
         this.status = ServiceOrderStatus.RECEBIDA;
         addHistory(ServiceOrderStatus.RECEBIDA, "OS recebida e registrada.");
+    }
+
+    public ServiceOrder(Long id, OffsetDateTime createdAt, OffsetDateTime updatedAt,
+                         String code, Customer customer, Vehicle vehicle, ServiceOrderStatus status,
+                         String customerNotes, String diagnosis,
+                         BigDecimal totalServices, BigDecimal totalParts, BigDecimal totalAmount,
+                         OffsetDateTime approvedAt, OffsetDateTime startedAt, OffsetDateTime finalizedAt, OffsetDateTime deliveredAt) {
+        super(id, createdAt, updatedAt);
+        this.code = code;
+        this.customer = customer;
+        this.vehicle = vehicle;
+        this.status = status;
+        this.customerNotes = customerNotes;
+        this.diagnosis = diagnosis;
+        this.totalServices = totalServices;
+        this.totalParts = totalParts;
+        this.totalAmount = totalAmount;
+        this.approvedAt = approvedAt;
+        this.startedAt = startedAt;
+        this.finalizedAt = finalizedAt;
+        this.deliveredAt = deliveredAt;
     }
 
     public void addService(WorkOrderService item) {

@@ -44,6 +44,7 @@ public class CatalogService implements CatalogUseCase {
     public ServiceCatalogItem update(Long id, CatalogCommand command) {
         var item = findEntity(id);
         item.update(command.name(), command.description(), command.basePrice(), command.estimatedMinutes(), command.active());
+        catalog.save(item);
         return item;
     }
 

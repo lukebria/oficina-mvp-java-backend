@@ -17,22 +17,29 @@ class CatalogPersistenceAdapter implements CatalogRepositoryPort {
 
     @Override
     public List<ServiceCatalogItem> findAll() {
-        return jpaRepository.findAll();
+        return jpaRepository.findAll().stream().map(ServiceCatalogItemMapper::toDomain).toList();
     }
 
     @Override
     public Optional<ServiceCatalogItem> findById(Long id) {
-        return jpaRepository.findById(id);
+        return jpaRepository.findById(id).map(ServiceCatalogItemMapper::toDomain);
     }
 
     @Override
     public ServiceCatalogItem save(ServiceCatalogItem item) {
-        return jpaRepository.save(item);
+        ServiceCatalogItemJpaEntity entity;
+        if (item.getId() == null) {
+            entity = ServiceCatalogItemMapper.toNewEntity(item);
+        } else {
+            entity = jpaRepository.getReferenceById(item.getId());
+            ServiceCatalogItemMapper.applyToEntity(item, entity);
+        }
+        return ServiceCatalogItemMapper.toDomain(jpaRepository.save(entity));
     }
 
     @Override
     public void delete(ServiceCatalogItem item) {
-        jpaRepository.delete(item);
+        jpaRepository.deleteById(item.getId());
     }
 
     @Override

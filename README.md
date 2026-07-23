@@ -76,20 +76,28 @@ Hexagonal (Ports & Adapters)**. Cada módulo (`customer`, `vehicle`, `catalog`, 
 src/main/java/br/com/oficina/mvp/
   OficinaMvpApplication.java
   <modulo>/
-    domain/                     entidade JPA e regras de domínio do módulo
+    domain/                     modelo de domínio puro (POJO, sem anotação JPA) e regras de negócio do módulo
     application/                caso de uso (implementa as portas de entrada)
     application/port/in/        portas de entrada — interface de caso de uso + Command/Result
     application/port/out/       portas de saída — o que o módulo precisa de fora (ex: repositório)
     adapter/in/web/             controller REST + DTOs de request/response
-    adapter/out/persistence/    repositório Spring Data (package-private) + adapter da porta
+    adapter/out/persistence/    entidade JPA + mapper (domínio ↔ entidade) + repositório Spring Data
+                                 (package-private) + adapter da porta
   shared/
-    domain/     vocabulário compartilhado entre módulos (BaseEntity, enums Role e ServiceOrderStatus)
-    config/     segurança, CORS, OpenAPI, seed e properties
-    exception/  exceções e handler global
-    security/   filtro e serviço JWT
-    validation/ validadores de CPF/CNPJ e placa
-    api/        endpoints técnicos que não pertencem a um módulo de negócio (healthcheck)
+    domain/      vocabulário compartilhado entre módulos (BaseDomain, enums Role e ServiceOrderStatus)
+    persistence/ infraestrutura JPA compartilhada (BaseJpaEntity)
+    config/      segurança, CORS, OpenAPI, seed e properties
+    exception/   exceções e handler global
+    security/    filtro e serviço JWT
+    validation/  validadores de CPF/CNPJ e placa
+    api/         endpoints técnicos que não pertencem a um módulo de negócio (healthcheck)
 ```
+
+O `domain` de cada módulo é um POJO puro — sem `@Entity`, sem nenhuma dependência de `jakarta.persistence` — e a
+entidade JPA correspondente (`XJpaEntity`) vive isolada dentro de `adapter/out/persistence`, junto com o `XMapper`
+que converte entre as duas. Isso mantém a regra de dependência da Arquitetura Hexagonal: `domain` não conhece
+framework nenhum. Detalhes de como o mapper monta o grafo de agregados (ex: `ServiceOrder` com cliente, veículo,
+itens e histórico) estão em [`docs/architecture.md`](docs/architecture.md).
 
 Quando um módulo precisa de outro (por exemplo `serviceorder` buscando `Customer`, `Vehicle`, `ServiceCatalogItem` e
 `Part`), ele depende sempre da **porta** do módulo alheio (`CustomerRepositoryPort`, `VehicleUseCase` etc.), nunca da
@@ -703,13 +711,15 @@ Modelo entidade-relacionamento visual do banco.
 
 ## Pontos de atenção
 
-- O domínio de cada módulo permanece anotado com JPA (`@Entity`) — não há separação entre entidade de persistência e
-  modelo de domínio puro; foi uma escolha pragmática para não multiplicar classes de mapeamento.
+- O domínio de cada módulo é um POJO puro, sem nenhuma anotação JPA; a entidade de persistência (`XJpaEntity`) e o
+  mapeamento domínio ↔ entidade (`XMapper`) ficam isolados em `adapter/out/persistence`. Um módulo novo deve seguir
+  essa mesma receita — nunca anotar uma classe de `domain` com `@Entity`/`@Column`/etc.
 - O Hibernate está com `ddl-auto: validate`; alterações de schema devem ser feitas via Flyway.
-- `open-in-view` está `false` (boa prática); por isso os adapters de persistência (`*PersistenceAdapter`) inicializam
-  explicitamente as associações `LAZY` (`Hibernate.initialize`) antes de a entidade cruzar a porta, já que o
-  mapeamento para DTO acontece no controller, fora da transação. Um novo módulo com relações `LAZY` retornadas para
-  fora da transação precisa do mesmo cuidado.
+- `open-in-view` está `false` (boa prática). Como consequência, os adapters de persistência que navegam associações
+  `LAZY` para montar o domínio (`VehiclePersistenceAdapter`, `ServiceOrderPersistenceAdapter`) são `@Transactional`
+  na própria classe — garantem sua sessão Hibernate independentemente de quem os chama (o `application` service ou,
+  em testes, o port sendo usado diretamente). Um novo módulo com relações `LAZY` acessadas pelo mapper precisa do
+  mesmo cuidado, senão o acesso fora de uma transação falha com `LazyInitializationException`.
 - A autorização por perfil (`ADMIN`, `MECHANIC`, `ATTENDANT`) é aplicada por rota/método em `SecurityConfig`; veja a
   tabela em [Autorização por perfil](#autorização-por-perfil). Coberta por `AuthorizationIntegrationTest`
   (Spring Security real, sem mocks).

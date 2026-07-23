@@ -10,12 +10,13 @@ com o mesmo esqueleto interno em todos:
 
 ```txt
 <contexto>/
-  domain/                     entidade JPA e regras de domínio
+  domain/                     modelo de domínio puro (POJO, sem JPA) e regras de negócio
   application/                caso de uso (implementa a porta de entrada)
   application/port/in/        porta de entrada (UseCase + Command/Result)
   application/port/out/       porta de saída (o que o módulo precisa de fora)
   adapter/in/web/              controller REST + DTOs de request/response
-  adapter/out/persistence/     JpaRepository (package-private) + PersistenceAdapter
+  adapter/out/persistence/     entidade JPA (XJpaEntity) + mapper domínio↔entidade (XMapper) + JpaRepository
+                                (package-private) + PersistenceAdapter
 ```
 
 Detalhamento completo por módulo está em [`architecture.md`](architecture.md); este documento foca no mapeamento
@@ -32,7 +33,8 @@ conceito-a-conceito com um backend TS/Node equivalente.
 | Command/DTO de entrada da aplicação        | `<contexto>/application/port/in/*Command.java`                                |
 | Interface de repositório (porta de saída)  | `<contexto>/application/port/out/*RepositoryPort.java`                        |
 | Implementação do repositório (ORM)         | `<contexto>/adapter/out/persistence/*JpaRepository.java` + `*PersistenceAdapter.java` (ambos package-private) |
-| Entidade de domínio + mapeamento ORM       | `<contexto>/domain/*.java` (anotado com JPA `@Entity`) + Flyway `V1__init.sql`|
+| Modelo de domínio puro                     | `<contexto>/domain/*.java` (POJO, sem `jakarta.persistence`)                  |
+| Entidade de persistência + mapeamento ORM  | `<contexto>/adapter/out/persistence/*JpaEntity.java` (anotada com JPA `@Entity`) + `*Mapper.java` (domínio ↔ entidade) + Flyway `V1__init.sql` |
 | DTO de request/response HTTP               | Records Java em `<contexto>/adapter/in/web/*RequestDto.java` / `*ResponseDto.java` |
 | Enum compartilhado                         | `shared/domain/*.java` (`Role`, `ServiceOrderStatus`)                         |
 | Validação de schema HTTP                   | Jakarta Bean Validation nos DTOs                                              |
@@ -61,7 +63,7 @@ conceito-a-conceito com um backend TS/Node equivalente.
 | `part`                    | Peças/insumos e estoque                                       | `PartController`, `PartUseCase`, `PartCommand`, `PartService`, `PartRepositoryPort`, `Part`, `PartRequestDto`, `PartResponseDto`                             |
 | `serviceorder`            | Ordem de serviço, orçamento, aprovação, status e histórico     | `ServiceOrderController`, `PublicServiceOrderController`, `ServiceOrderUseCase`, `PublicServiceOrderUseCase`, `CreateServiceOrderCommand`, `ServiceOrderService`, `ServiceOrderRepositoryPort`, `ServiceOrderNotificationPort`, `ServiceOrderStatusNotificationAdapter`, `ServiceOrder`, `WorkOrderService`, `WorkOrderPart`, `WorkOrderLineItem`, `ServiceOrderStatusHistory`, `ServiceOrderStatusPolicy` |
 | `report`                  | Tempo médio de execução (só leitura, sem `domain` próprio)     | `ReportController`, `ReportUseCase`, `AverageExecutionTimeResult`, `ReportService` (lê via `ServiceOrderRepositoryPort` do módulo `serviceorder`), `AverageExecutionTimeResponseDto` |
-| `shared`                  | Vocabulário e infraestrutura transversal                       | `shared.domain.BaseEntity`, `shared.domain.Role`, `shared.domain.ServiceOrderStatus`, `SecurityConfig`, `JwtService`, `JwtAuthenticationFilter`, `GlobalExceptionHandler`, `ApiError`, `BusinessException`, `DocumentValidator`, `PlateValidator`, `DataSeeder`, `OpenApiConfig`, `shared.api.HealthController` |
+| `shared`                  | Vocabulário e infraestrutura transversal                       | `shared.domain.BaseDomain`, `shared.persistence.BaseJpaEntity`, `shared.domain.Role`, `shared.domain.ServiceOrderStatus`, `SecurityConfig`, `JwtService`, `JwtAuthenticationFilter`, `GlobalExceptionHandler`, `ApiError`, `BusinessException`, `DocumentValidator`, `PlateValidator`, `DataSeeder`, `OpenApiConfig`, `shared.api.HealthController` |
 
 ## 3. Mapeamento de rotas
 
@@ -107,22 +109,24 @@ sendo uma única classe de aplicação por trás dos dois controllers.
 
 ## 4. Mapeamento de banco de dados
 
-| Entidade Java (`<módulo>/domain`)  | Tabela SQL/Flyway                | Porta de saída (`application/port/out`) | Adapter (`adapter/out/persistence`)     |
-|--------------------------------------|-------------------------------------|--------------------------------------------|---------------------------------------------|
-| `auth.domain.User`                    | `users`                             | `UserRepositoryPort`                        | `UserJpaRepository` + `UserPersistenceAdapter` |
-| `customer.domain.Customer`            | `customers`                         | `CustomerRepositoryPort`                    | `CustomerJpaRepository` + `CustomerPersistenceAdapter` |
-| `vehicle.domain.Vehicle`              | `vehicles`                          | `VehicleRepositoryPort`                     | `VehicleJpaRepository` + `VehiclePersistenceAdapter` |
-| `catalog.domain.ServiceCatalogItem`   | `service_catalog_items`             | `CatalogRepositoryPort`                     | `ServiceCatalogItemJpaRepository` + `CatalogPersistenceAdapter` |
-| `part.domain.Part`                    | `parts`                             | `PartRepositoryPort`                        | `PartJpaRepository` + `PartPersistenceAdapter` |
-| `serviceorder.domain.ServiceOrder`    | `service_orders`                    | `ServiceOrderRepositoryPort`                | `ServiceOrderJpaRepository` + `ServiceOrderPersistenceAdapter` |
-| `serviceorder.domain.WorkOrderService`| `work_order_services`               | via cascade de `ServiceOrder`               | —                                             |
-| `serviceorder.domain.WorkOrderPart`   | `work_order_parts`                  | via cascade de `ServiceOrder`               | —                                             |
-| `serviceorder.domain.ServiceOrderStatusHistory` | `service_order_status_history` | via cascade de `ServiceOrder`         | —                                             |
-| —                                     | `flyway_schema_history`             | gerenciado pelo Flyway                      | —                                             |
+| Modelo de domínio (`<módulo>/domain`) | Entidade JPA (`adapter/out/persistence`) | Tabela SQL/Flyway         | Porta de saída (`application/port/out`) | Adapter (`adapter/out/persistence`)     |
+|------------------------------------------|-----------------------------------------------|-------------------------------------|--------------------------------------------|---------------------------------------------|
+| `auth.domain.User`                    | `UserJpaEntity`                       | `users`                             | `UserRepositoryPort`                        | `UserJpaRepository` + `UserMapper` + `UserPersistenceAdapter` |
+| `customer.domain.Customer`            | `CustomerJpaEntity`                   | `customers`                         | `CustomerRepositoryPort`                    | `CustomerJpaRepository` + `CustomerMapper` + `CustomerPersistenceAdapter` |
+| `vehicle.domain.Vehicle`              | `VehicleJpaEntity`                    | `vehicles`                          | `VehicleRepositoryPort`                     | `VehicleJpaRepository` + `VehicleMapper` + `VehiclePersistenceAdapter` |
+| `catalog.domain.ServiceCatalogItem`   | `ServiceCatalogItemJpaEntity`         | `service_catalog_items`             | `CatalogRepositoryPort`                     | `ServiceCatalogItemJpaRepository` + `ServiceCatalogItemMapper` + `CatalogPersistenceAdapter` |
+| `part.domain.Part`                    | `PartJpaEntity`                       | `parts`                             | `PartRepositoryPort`                        | `PartJpaRepository` + `PartMapper` + `PartPersistenceAdapter` |
+| `serviceorder.domain.ServiceOrder`    | `ServiceOrderJpaEntity`               | `service_orders`                    | `ServiceOrderRepositoryPort`                | `ServiceOrderJpaRepository` + `ServiceOrderMapper` + `ServiceOrderPersistenceAdapter` |
+| `serviceorder.domain.WorkOrderService`| `WorkOrderServiceJpaEntity`           | `work_order_services`               | via cascade de `ServiceOrder`               | —                                             |
+| `serviceorder.domain.WorkOrderPart`   | `WorkOrderPartJpaEntity`              | `work_order_parts`                  | via cascade de `ServiceOrder`               | —                                             |
+| `serviceorder.domain.ServiceOrderStatusHistory` | `ServiceOrderStatusHistoryJpaEntity` | `service_order_status_history` | via cascade de `ServiceOrder`         | —                                             |
+| —                                     | —                                      | `flyway_schema_history`             | gerenciado pelo Flyway                      | —                                             |
 
-Os repositórios Spring Data (`*JpaRepository`) e os adapters (`*PersistenceAdapter`) são **package-private** —
-visíveis só dentro do próprio pacote `adapter/out/persistence`. Nenhum outro módulo enxerga a interface `JpaRepository`
-diretamente; tudo passa pela porta (`*RepositoryPort`).
+As entidades JPA (`*JpaEntity`) vivem só dentro de `adapter/out/persistence` — o `domain` nunca importa
+`jakarta.persistence`. Os repositórios Spring Data (`*JpaRepository`), os mappers (`*Mapper`, exceto quando outro
+módulo precisa montar o objeto embutido — ver seção 4.9 de `architecture.md`) e os adapters (`*PersistenceAdapter`)
+são **package-private**. Nenhum outro módulo enxerga a interface `JpaRepository` diretamente; tudo passa pela porta
+(`*RepositoryPort`), que sempre trabalha em termos do modelo de domínio puro.
 
 ## 5. Mapeamento de validações
 

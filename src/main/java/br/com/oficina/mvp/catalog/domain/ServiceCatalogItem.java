@@ -1,30 +1,16 @@
 package br.com.oficina.mvp.catalog.domain;
 
-import br.com.oficina.mvp.shared.domain.BaseEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
+import br.com.oficina.mvp.shared.domain.BaseDomain;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 
-@Entity
-@Table(name = "service_catalog_items")
-public class ServiceCatalogItem extends BaseEntity {
-    @Column(nullable = false, unique = true)
+public class ServiceCatalogItem extends BaseDomain {
     private String name;
-
     private String description;
-
-    @Column(name = "base_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal basePrice;
-
-    @Column(name = "estimated_minutes", nullable = false)
     private Integer estimatedMinutes;
-
-    @Column(nullable = false)
-    private Boolean active = true;
-
-    protected ServiceCatalogItem() {}
+    private Boolean active;
 
     public ServiceCatalogItem(String name, String description, BigDecimal basePrice, Integer estimatedMinutes, Boolean active) {
         this.name = name;
@@ -32,6 +18,16 @@ public class ServiceCatalogItem extends BaseEntity {
         this.basePrice = basePrice;
         this.estimatedMinutes = estimatedMinutes;
         this.active = active == null || active;
+    }
+
+    public ServiceCatalogItem(Long id, OffsetDateTime createdAt, OffsetDateTime updatedAt,
+                               String name, String description, BigDecimal basePrice, Integer estimatedMinutes, Boolean active) {
+        super(id, createdAt, updatedAt);
+        this.name = name;
+        this.description = description;
+        this.basePrice = basePrice;
+        this.estimatedMinutes = estimatedMinutes;
+        this.active = active;
     }
 
     public void update(String name, String description, BigDecimal basePrice, Integer estimatedMinutes, Boolean active) {

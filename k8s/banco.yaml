@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: banco-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: banco
+  template:
+    metadata:
+      labels:
+        app: banco
+    spec:
+      containers:
+        - name: banco
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DB_NAME
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DB_PASSWORD
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: banco-service
+spec:
+  selector:
+    app: banco
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  type: ClusterIP
