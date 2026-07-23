@@ -1,32 +1,26 @@
 package br.com.oficina.mvp.auth.domain;
 
+import br.com.oficina.mvp.shared.domain.BaseDomain;
 import br.com.oficina.mvp.shared.domain.Role;
-import br.com.oficina.mvp.shared.domain.BaseEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Table;
 
-@Entity
-@Table(name = "users")
-public class User extends BaseEntity {
-    @Column(nullable = false)
-    private String name;
+import java.time.OffsetDateTime;
 
-    @Column(nullable = false, unique = true)
-    private String email;
-
-    @Column(name = "password_hash", nullable = false)
-    private String passwordHash;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Role role = Role.ATTENDANT;
-
-    protected User() {}
+public class User extends BaseDomain {
+    private final String name;
+    private final String email;
+    private final String passwordHash;
+    private final Role role;
 
     public User(String name, String email, String passwordHash, Role role) {
+        this.name = name;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.role = role == null ? Role.ATTENDANT : role;
+    }
+
+    public User(Long id, OffsetDateTime createdAt, OffsetDateTime updatedAt,
+                String name, String email, String passwordHash, Role role) {
+        super(id, createdAt, updatedAt);
         this.name = name;
         this.email = email;
         this.passwordHash = passwordHash;

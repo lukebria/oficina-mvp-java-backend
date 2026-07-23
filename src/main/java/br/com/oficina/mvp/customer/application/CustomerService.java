@@ -45,6 +45,7 @@ public class CustomerService implements CustomerUseCase {
         var customer = findEntity(id);
         var document = DocumentValidator.requireValid(command.document());
         customer.update(command.name(), document, command.email(), command.phone());
+        customers.save(customer);
         return customer;
     }
 

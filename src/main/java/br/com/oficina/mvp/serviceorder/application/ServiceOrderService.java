@@ -91,6 +91,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
         var customer = customers.findByDocument(document)
                 .orElseGet(() -> customers.save(new Customer(data.name(), document, data.email(), data.phone())));
         customer.update(data.name(), document, data.email(), data.phone());
+        customers.save(customer);
         return customer;
     }
 
@@ -98,6 +99,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
         var vehicle = vehicles.findByPlate(plate)
                 .orElseGet(() -> vehicles.save(new Vehicle(customer, plate, data.brand(), data.model(), data.manufacturingYear())));
         vehicle.update(customer, plate, data.brand(), data.model(), data.manufacturingYear());
+        vehicles.save(vehicle);
         return vehicle;
     }
 
@@ -131,6 +133,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
             decrementStock(order);
         }
         order.decideApproval(approved, comment);
+        serviceOrders.save(order);
         if (approved) {
             notifications.notifyStatusChanged(order);
         }
@@ -142,6 +145,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
     public ServiceOrder updateStatus(Long id, ServiceOrderStatus status, String comment) {
         var order = findEntity(id);
         order.changeStatus(status, comment);
+        serviceOrders.save(order);
         if (status != ServiceOrderStatus.RECUSADA) {
             notifications.notifyStatusChanged(order);
         }
@@ -153,6 +157,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
     public ServiceOrder updateDiagnosis(Long id, String diagnosis) {
         var order = findEntity(id);
         order.updateDiagnosis(diagnosis);
+        serviceOrders.save(order);
         return order;
     }
 
@@ -187,9 +192,11 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
             validateStock(order);
             decrementStock(order);
             order.decideApproval(true, comment == null ? "Orçamento aprovado pelo cliente. OS enviada para execução." : comment);
+            serviceOrders.save(order);
             notifications.notifyStatusChanged(order);
         } else {
             order.decideApproval(false, comment == null ? "Orçamento recusado pelo cliente." : comment);
+            serviceOrders.save(order);
         }
         return order;
     }
@@ -215,6 +222,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
     private void decrementStock(ServiceOrder order) {
         for (var orderPart : order.getParts()) {
             orderPart.getPart().decrementStock(orderPart.getQuantity());
+            parts.save(orderPart.getPart());
         }
     }
 
