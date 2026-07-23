@@ -1,23 +1,19 @@
 package br.com.oficina.mvp.serviceorder.domain;
 
 import br.com.oficina.mvp.catalog.domain.ServiceCatalogItem;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
 
-@Entity
-@Table(name = "work_order_services")
+import java.math.BigDecimal;
+
 public class WorkOrderService extends WorkOrderLineItem {
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "service_item_id", nullable = false)
-    private ServiceCatalogItem serviceItem;
-
-    protected WorkOrderService() {}
+    private final ServiceCatalogItem serviceItem;
 
     public WorkOrderService(ServiceCatalogItem serviceItem, Integer quantity) {
         super(quantity == null ? 1 : quantity, serviceItem.getBasePrice());
+        this.serviceItem = serviceItem;
+    }
+
+    public WorkOrderService(Long id, ServiceCatalogItem serviceItem, Integer quantity, BigDecimal unitPrice, BigDecimal totalPrice) {
+        super(id, quantity, unitPrice, totalPrice);
         this.serviceItem = serviceItem;
     }
 

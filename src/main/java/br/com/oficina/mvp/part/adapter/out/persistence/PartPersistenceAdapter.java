@@ -17,22 +17,29 @@ class PartPersistenceAdapter implements PartRepositoryPort {
 
     @Override
     public List<Part> findAll() {
-        return jpaRepository.findAll();
+        return jpaRepository.findAll().stream().map(PartMapper::toDomain).toList();
     }
 
     @Override
     public Optional<Part> findById(Long id) {
-        return jpaRepository.findById(id);
+        return jpaRepository.findById(id).map(PartMapper::toDomain);
     }
 
     @Override
     public Part save(Part part) {
-        return jpaRepository.save(part);
+        PartJpaEntity entity;
+        if (part.getId() == null) {
+            entity = PartMapper.toNewEntity(part);
+        } else {
+            entity = jpaRepository.getReferenceById(part.getId());
+            PartMapper.applyToEntity(part, entity);
+        }
+        return PartMapper.toDomain(jpaRepository.save(entity));
     }
 
     @Override
     public void delete(Part part) {
-        jpaRepository.delete(part);
+        jpaRepository.deleteById(part.getId());
     }
 
     @Override

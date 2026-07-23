@@ -1,4 +1,4 @@
-package br.com.oficina.mvp.shared.domain;
+package br.com.oficina.mvp.shared.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.GeneratedValue;
@@ -10,7 +10,7 @@ import jakarta.persistence.PreUpdate;
 import java.time.OffsetDateTime;
 
 @MappedSuperclass
-public abstract class BaseEntity {
+public abstract class BaseJpaEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

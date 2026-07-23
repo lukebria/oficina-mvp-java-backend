@@ -1,25 +1,25 @@
 package br.com.oficina.mvp.customer.domain;
 
-import br.com.oficina.mvp.shared.domain.BaseEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
+import br.com.oficina.mvp.shared.domain.BaseDomain;
 
-@Entity
-@Table(name = "customers")
-public class Customer extends BaseEntity {
-    @Column(nullable = false)
+import java.time.OffsetDateTime;
+
+public class Customer extends BaseDomain {
     private String name;
-
-    @Column(nullable = false, unique = true)
     private String document;
-
     private String email;
     private String phone;
 
-    protected Customer() {}
-
     public Customer(String name, String document, String email, String phone) {
+        this.name = name;
+        this.document = document;
+        this.email = email;
+        this.phone = phone;
+    }
+
+    public Customer(Long id, OffsetDateTime createdAt, OffsetDateTime updatedAt,
+                     String name, String document, String email, String phone) {
+        super(id, createdAt, updatedAt);
         this.name = name;
         this.document = document;
         this.email = email;

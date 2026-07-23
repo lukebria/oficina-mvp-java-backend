@@ -50,6 +50,7 @@ public class VehicleService implements VehicleUseCase {
         var customer = customerUseCase.findById(command.customerId());
         var plate = PlateValidator.requireValid(command.plate());
         vehicle.update(customer, plate, command.brand(), command.model(), command.manufacturingYear());
+        vehicles.save(vehicle);
         return vehicle;
     }
 
