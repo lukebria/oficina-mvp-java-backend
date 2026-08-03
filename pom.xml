@@ -20,7 +20,7 @@
     </description>
 
     <properties>
-        <java.version>25</java.version>
+        <java.version>21</java.version>
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>3.0.3</springdoc.version>
     </properties>
@@ -149,13 +149,16 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>br.com.oficina.mvp.OficinaMvpApplication</mainClass>
+                </configuration>
             </plugin>
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <release>25</release>
+                    <release>21</release>
                     <parameters>true</parameters>
                 </configuration>
             </plugin>
