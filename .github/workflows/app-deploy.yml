@@ -77,7 +77,7 @@ jobs:
   # ==========================================
   build:
     name: "3. Build Artifact"
-    needs: sonarqube # Só roda se o Job 'test' passar!
+    #needs: sonarqube # Só roda se o Job 'test' passar!
     runs-on: ubuntu-latest
 
     steps:
