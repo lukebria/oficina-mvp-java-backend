@@ -39,7 +39,7 @@ jobs:
   # ==========================================
   sonarqube:
     name: "2. SonarQube Scan"
-    needs: test # Só roda se os testes passarem
+    # needs: test # Só roda se os testes passarem
     runs-on: ubuntu-latest
 
     steps:
