@@ -99,9 +99,10 @@ jobs:
   # ==========================================
   push:
     name: "4. Docker Build & ECR Push"
-    needs: build # Só roda se o Job 'build' passar!
+    needs: build
     runs-on: ubuntu-latest
-
+    outputs:
+      ecr_registry: ${{ steps.login-ecr.outputs.registry }} # <--- ADICIONE ESTE BLOCO AQUI
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -115,7 +116,7 @@ jobs:
           aws-region: ${{ vars.AWS_DEFAULT_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr
+        id: login-ecr # <--- O ID É OBRIGATÓRIO PARA CAPTURAR A SAÍDA
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, Tag and Push Image to Amazon ECR
@@ -127,7 +128,6 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
 # ==========================================
   # JOB 4: DEPLOY
   # Conecta no EKS e aplica os manifestos Kubernetes
