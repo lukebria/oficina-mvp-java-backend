@@ -204,27 +204,6 @@ flowchart LR
 > A infraestrutura como código (Terraform) do cluster e do banco é provisionada em um repositório separado — ver
 > [Infraestrutura como código (Terraform)](#infraestrutura-como-código-terraform).
 
-### Fluxo de deploy (CI/CD)
-
-```mermaid
-sequenceDiagram
-    actor Dev as Desenvolvedor
-    participant GH as GitHub (push/PR)
-    participant CI as GitHub Actions
-    participant Sonar as SonarCloud
-    participant ECR as Amazon ECR
-    participant EKS as Amazon EKS
-
-    Dev->>GH: git push (main/master)
-    GH->>CI: dispara "Oficina App - Pipeline"
-    CI->>CI: 1. Run Tests (mvn clean test)
-    CI->>Sonar: 2. SonarQube Scan (mvn verify sonar:sonar)
-    CI->>CI: 3. Build Artifact (mvn clean package)
-    CI->>ECR: 4. Docker Build & Push (tag = SHA e latest)
-    CI->>EKS: 5. Deploy (kubectl apply: config-secret, banco, app, hpa)
-    EKS-->>Dev: aplicação disponível via LoadBalancer
-```
-
 ## Como rodar localmente
 
 ### 1. Pré-requisitos
@@ -336,9 +315,6 @@ kubectl apply -f k8s/hpa.yaml
 
 O provisionamento do cluster Kubernetes (EKS) e do banco de dados via Terraform está sendo feito em um
 **repositório de infraestrutura separado**  - fora deste repositório.
-
-🔲 TODO: adicionar aqui o link do repositório de infra, os recursos provisionados e como aplicar, assim que estiver
-disponível.
 
 Enquanto isso, a pipeline deste repositório assume um cluster EKS **já existente**, chamado
 `oficina-mecnica-lab-cluster` (ver `aws eks update-kubeconfig` em `.github/workflows/app-deploy.yml`).
@@ -851,16 +827,6 @@ A documentação interativa da API é gerada via **Swagger/OpenAPI** (springdoc)
 Swagger UI (local): http://localhost:3000/swagger-ui.html
 OpenAPI JSON (local): http://localhost:3000/v3/api-docs
 ```
-
-🔲 TODO: adicionar aqui o link público do Swagger (depois que a aplicação estiver publicada no LoadBalancer do EKS)
-e/ou uma collection exportada (Postman/Insomnia), para atender ao requisito de link para a collection completa das
-APIs da entrega da Fase 2.
-
-## Vídeo demonstrativo
-
-🔲 TODO: adicionar aqui o link do vídeo demonstrativo (YouTube ou Vimeo, público ou não listado, até 15 minutos),
-mostrando: subida da infraestrutura, deploy e execução da aplicação, execução do CI/CD, consumo das APIs e
-escalabilidade automática (HPA).
 
 ## Documentação complementar
 
