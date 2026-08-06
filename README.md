@@ -11,8 +11,11 @@ automático, aprovação pelo cliente, histórico de status e relatório de temp
 - [Stack](#stack)
 - [Funcionalidades](#funcionalidades)
 - [Arquitetura do projeto](#arquitetura-do-projeto)
+- [Diagramas](#diagramas)
 - [Como rodar localmente](#como-rodar-localmente)
 - [Como rodar com Docker](#como-rodar-com-docker)
+- [Deploy em Kubernetes](#deploy-em-kubernetes)
+- [Infraestrutura como código (Terraform)](#infraestrutura-como-código-terraform)
 - [Variáveis de ambiente](#variáveis-de-ambiente)
 - [Usuário admin inicial](#usuário-admin-inicial)
 - [Autenticação](#autenticação)
@@ -20,6 +23,8 @@ automático, aprovação pelo cliente, histórico de status e relatório de temp
 - [Payloads úteis](#payloads-úteis)
 - [Banco de dados](#banco-de-dados)
 - [Testes e cobertura](#testes-e-cobertura)
+- [Collection de APIs](#collection-de-apis)
+- [Vídeo demonstrativo](#vídeo-demonstrativo)
 - [Documentação complementar](#documentação-complementar)
 - [Pontos de atenção](#pontos-de-atenção)
 
@@ -114,6 +119,112 @@ As principais regras de negócio ficam em:
 - `PlateValidator`: validação de placa antiga e Mercosul;
 - `Part`: normalização de SKU e baixa de estoque.
 
+## Diagramas
+
+### Componentes da aplicação
+
+```mermaid
+flowchart TB
+    WEB["Cliente / Front-end / Postman"]
+
+    subgraph API["Oficina MVP Backend (Spring Boot)"]
+        direction TB
+        SEC["Spring Security + JWT"]
+        subgraph Modules["Módulos de negócio (arquitetura hexagonal)"]
+            direction LR
+            AUTH["auth"]
+            CUST["customer"]
+            VEH["vehicle"]
+            CAT["catalog"]
+            PART["part"]
+            SO["serviceorder"]
+            REP["report"]
+        end
+        SHARED["shared: config, exception, validation, security"]
+    end
+
+    DB[("PostgreSQL")]
+    SMTP[["Gmail SMTP"]]
+
+    WEB -->|"HTTP/JSON + Bearer JWT"| SEC
+    SEC --> Modules
+    Modules --- SHARED
+    AUTH --> DB
+    CUST --> DB
+    VEH --> DB
+    CAT --> DB
+    PART --> DB
+    SO --> DB
+    REP --> DB
+    SO -->|"notifica mudança de status"| SMTP
+```
+
+Cada módulo segue o esqueleto `domain` → `application` (`port/in`/`port/out`) → `adapter/in/web` /
+`adapter/out/persistence` descrito em [Arquitetura do projeto](#arquitetura-do-projeto).
+
+### Infraestrutura provisionada
+
+```mermaid
+flowchart LR
+    subgraph GH["GitHub"]
+        REPO["oficina-mvp-java"]
+        GHA["GitHub Actions"]
+        SECRETS[("GitHub Secrets")]
+    end
+
+    subgraph AWS["AWS"]
+        ECR[("Amazon ECR<br/>oficina-mecnica-lab")]
+        subgraph EKS["Amazon EKS Cluster"]
+            LB["Service oficina-app-service<br/>(LoadBalancer)"]
+            HPA{{"HPA oficina-app-hpa<br/>2–5 réplicas · CPU 70%"}}
+            subgraph Pods["Deployment oficina-app-deployment"]
+                POD1["Pod app"]
+                POD2["Pod app"]
+                PODN["Pod app (auto-scale)"]
+            end
+            CM[("ConfigMap app-config")]
+            SEC2[("Secret app-secrets")]
+            DBDEP["Deployment banco-deployment"]
+            DBSVC["Service banco-service"]
+        end
+    end
+
+    INTERNET(("Internet")) --> LB
+    LB --> Pods
+    HPA -. escala .-> Pods
+    CM --> Pods
+    SEC2 --> Pods
+    Pods --> DBSVC --> DBDEP
+    GHA -->|"docker push"| ECR
+    ECR -->|"docker pull"| Pods
+    SECRETS --> GHA
+    REPO --> GHA
+```
+
+> A infraestrutura como código (Terraform) do cluster e do banco é provisionada em um repositório separado — ver
+> [Infraestrutura como código (Terraform)](#infraestrutura-como-código-terraform).
+
+### Fluxo de deploy (CI/CD)
+
+```mermaid
+sequenceDiagram
+    actor Dev as Desenvolvedor
+    participant GH as GitHub (push/PR)
+    participant CI as GitHub Actions
+    participant Sonar as SonarCloud
+    participant ECR as Amazon ECR
+    participant EKS as Amazon EKS
+
+    Dev->>GH: git push (main/master)
+    GH->>CI: dispara "Oficina App - Pipeline"
+    CI->>CI: 1. Run Tests (mvn clean test)
+    CI->>Sonar: 2. SonarQube Scan (mvn verify sonar:sonar)
+    CI->>CI: 3. Build Artifact (mvn clean package)
+    CI->>ECR: 4. Docker Build & Push (tag = SHA e latest)
+    CI->>EKS: 5. Deploy (kubectl apply: config-secret, banco, app, hpa)
+    EKS-->>Dev: aplicação disponível via LoadBalancer
+```
+
 ## Como rodar localmente
 
 ### 1. Pré-requisitos
@@ -188,6 +299,50 @@ O `Dockerfile` usa build multi-stage:
 1. imagem Maven com Eclipse Temurin 25 para empacotar o projeto;
 2. imagem JRE Eclipse Temurin 25 para executar o `app.jar`.
 
+## Deploy em Kubernetes
+
+Os manifests ficam em [`/k8s`](k8s):
+
+| Arquivo              | Recursos                                                                                        |
+|-----------------------|--------------------------------------------------------------------------------------------------|
+| `config-secret.yaml`  | `ConfigMap app-config` + `Secret app-secrets` (credenciais de banco, JWT, admin seed e e-mail)   |
+| `banco.yaml`          | `Deployment banco-deployment` + `Service banco-service` (PostgreSQL)                             |
+| `app.yaml`            | `Deployment oficina-app-deployment` (com `resources.requests/limits`) + `Service` (LoadBalancer) |
+| `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (2 a 5 réplicas, CPU 70%)                               |
+
+### Via CI/CD (automático)
+
+A pipeline (`.github/workflows/app-deploy.yml`) aplica os manifests automaticamente a cada push em `main`/`master`,
+depois de rodar os testes, o SonarQube e o build/push da imagem Docker para o ECR — ver
+[Fluxo de deploy (CI/CD)](#diagramas).
+
+### Manualmente (fora da pipeline)
+
+Pré-requisito: um cluster Kubernetes acessível via `kubectl` (local, como kind/minikube, ou remoto, como EKS).
+
+```bash
+kubectl apply -f k8s/config-secret.yaml
+kubectl apply -f k8s/banco.yaml
+kubectl apply -f k8s/app.yaml
+kubectl apply -f k8s/hpa.yaml
+```
+
+> ⚠️ `k8s/config-secret.yaml` e `k8s/app.yaml` têm placeholders (`${DB_PASSWORD}`, `${JWT_SECRET}`,
+> `${SEED_ADMIN_PASSWORD}`, `${ECR_REPOSITORY_URL}`) que na pipeline são substituídos via `envsubst`/`sed` a partir de
+> GitHub Secrets antes do `apply`. Para aplicar manualmente, substitua esses valores você mesmo antes de rodar os
+> comandos acima.
+
+## Infraestrutura como código (Terraform)
+
+O provisionamento do cluster Kubernetes (EKS) e do banco de dados via Terraform está sendo feito em um
+**repositório de infraestrutura separado**  - fora deste repositório.
+
+🔲 TODO: adicionar aqui o link do repositório de infra, os recursos provisionados e como aplicar, assim que estiver
+disponível.
+
+Enquanto isso, a pipeline deste repositório assume um cluster EKS **já existente**, chamado
+`oficina-mecnica-lab-cluster` (ver `aws eks update-kubeconfig` em `.github/workflows/app-deploy.yml`).
+
 ## Variáveis de ambiente
 
 As variáveis estão documentadas no `.env.example` e são lidas pelo `application.yml`.
@@ -205,6 +360,11 @@ As variáveis estão documentadas no `.env.example` e são lidas pelo `applicati
 | `CORS_ALLOWED_ORIGINS`   | `http://localhost:5173,http://localhost:3000`                  | Origens permitidas no CORS  |
 | `SEED_ADMIN_EMAIL`       | `admin@oficina.com`                                            | Email do admin inicial      |
 | `SEED_ADMIN_PASSWORD`    | `Admin@123`                                                    | Senha do admin inicial      |
+| `MAIL_HOST`              | `smtp.gmail.com`                                               | Host SMTP                   |
+| `MAIL_PORT`              | `587`                                                          | Porta SMTP (STARTTLS)       |
+| `MAIL_USERNAME`          | *(vazio)*                                                      | Usuário/e-mail SMTP         |
+| `MAIL_PASSWORD`          | *(vazio)*                                                      | Senha de app do Gmail       |
+| `MAIL_FROM`              | `MAIL_USERNAME` ou `no-reply@oficina.com`                      | Remetente dos e-mails de notificação de status |
 
 ## Usuário admin inicial
 
@@ -598,9 +758,11 @@ Timestamps relevantes:
 ## Notificação de mudança de status
 
 Toda vez que o status da OS muda (na criação, na aprovação, ou via `PATCH /{id}/status`), o cliente é notificado por
-e-mail — **exceto** quando o novo status é `RECUSADA`. Nesta primeira etapa do MVP, a notificação apenas é logada
-(sem envio real de e-mail); veja `ServiceOrderNotificationPort` / `ServiceOrderStatusNotificationAdapter` e a
-seção 7.7 de `docs/architecture.md` para detalhes.
+e-mail — **exceto** quando o novo status é `RECUSADA`. O envio é real, via SMTP (`JavaMailSender`, configurado para
+`smtp.gmail.com` por padrão), feito por `ServiceOrderStatusNotificationAdapter` (implementação de
+`ServiceOrderNotificationPort`); veja a seção 7.7 de `docs/architecture.md` para detalhes. As credenciais de e-mail
+são lidas via `MAIL_USERNAME`/`MAIL_PASSWORD`/`MAIL_FROM` (ver [Variáveis de ambiente](#variáveis-de-ambiente)) — em
+produção (K8s), `MAIL_PASSWORD` deve vir de um GitHub Secret real, não do valor de exemplo do manifest.
 
 ## Banco de dados
 
@@ -680,6 +842,25 @@ O projeto possui testes para:
   pegar `LazyInitializationException` que os testes de service (mockados) não detectam;
 - autorização por perfil ponta a ponta com Spring Security real, sem mocks (`AuthorizationIntegrationTest`),
   cobrindo os formatos de regra da matriz (todos os perfis, só ADMIN, ADMIN+MECHANIC e rota pública).
+
+## Collection de APIs
+
+A documentação interativa da API é gerada via **Swagger/OpenAPI** (springdoc):
+
+```txt
+Swagger UI (local): http://localhost:3000/swagger-ui.html
+OpenAPI JSON (local): http://localhost:3000/v3/api-docs
+```
+
+🔲 TODO: adicionar aqui o link público do Swagger (depois que a aplicação estiver publicada no LoadBalancer do EKS)
+e/ou uma collection exportada (Postman/Insomnia), para atender ao requisito de link para a collection completa das
+APIs da entrega da Fase 2.
+
+## Vídeo demonstrativo
+
+🔲 TODO: adicionar aqui o link do vídeo demonstrativo (YouTube ou Vimeo, público ou não listado, até 15 minutos),
+mostrando: subida da infraestrutura, deploy e execução da aplicação, execução do CI/CD, consumo das APIs e
+escalabilidade automática (HPA).
 
 ## Documentação complementar
 

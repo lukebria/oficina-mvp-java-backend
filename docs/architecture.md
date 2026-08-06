@@ -571,11 +571,12 @@ ServiceOrderNotificationPort.notifyStatusChanged(order)
   -> implementada por ServiceOrderStatusNotificationAdapter (serviceorder.adapter.out.notification)
 ```
 
-O canal definido é e-mail (`order.getCustomer().getEmail()`). Nesta primeira etapa do MVP, o adapter apenas loga a
-notificação (sem envio real); como é uma porta de saída, trocar por um envio real de e-mail (SMTP, provedor
-transacional etc.) é uma questão de implementar um novo adapter para `ServiceOrderNotificationPort`, sem alterar
-domínio nem application. Se o cliente não tiver e-mail cadastrado (campo opcional em `Customer`), o adapter loga um
-aviso e não falha a operação.
+O canal definido é e-mail (`order.getCustomer().getEmail()`). O adapter envia o e-mail de fato via `JavaMailSender`
+(SMTP, `smtp.gmail.com` por padrão, configurável por `MAIL_HOST`/`MAIL_PORT`/`MAIL_USERNAME`/`MAIL_PASSWORD`/
+`MAIL_FROM`); como é uma porta de saída, trocar por outro canal (provedor transacional, SMS etc.) é uma questão de
+implementar um novo adapter para `ServiceOrderNotificationPort`, sem alterar domínio nem application. Se o cliente
+não tiver e-mail cadastrado (campo opcional em `Customer`) ou o envio falhar (`MailException`), o adapter loga um
+aviso/erro e não falha a operação.
 
 Chamada apenas nos pontos que efetivamente mudam o status (não em `updateDiagnosis`), e condicionada ao status
 resultante ser diferente de `RECUSADA`:
