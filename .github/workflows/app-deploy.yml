@@ -1,10 +1,6 @@
 name: "Oficina App - Pipeline"
 
 on:
-  push:
-    branches:
-      - main
-      - master
   pull_request:
     branches:
       - main
@@ -39,7 +35,7 @@ jobs:
   # ==========================================
   sonarqube:
     name: "2. SonarQube Scan"
-    # needs: test # Só roda se os testes passarem
+    needs: test # Só roda se os testes passarem
     runs-on: ubuntu-latest
 
     steps:
@@ -77,7 +73,7 @@ jobs:
   # ==========================================
   build:
     name: "3. Build Artifact"
-    #needs: sonarqube # Só roda se o Job 'test' passar!
+    needs: sonarqube
     runs-on: ubuntu-latest
 
     steps:
