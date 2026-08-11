@@ -102,7 +102,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     outputs:
-      ecr_registry: ${{ steps.login-ecr.outputs.registry }} # <--- ADICIONE ESTE BLOCO AQUI
+      ecr_registry: ${{ steps.login-ecr.outputs.registry }} 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -116,7 +116,7 @@ jobs:
           aws-region: ${{ vars.AWS_DEFAULT_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr # <--- O ID É OBRIGATÓRIO PARA CAPTURAR A SAÍDA
+        id: login-ecr 
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, Tag and Push Image to Amazon ECR
@@ -163,7 +163,7 @@ jobs:
           SEED_ADMIN_PASSWORD: ${{ secrets.SEED_ADMIN_PASSWORD }}
         run: |
           # 1. Substitui os placeholders de Secrets no 01-config-secret.yaml
-          envsubst '${DB_PASSWORD} ${JWT_SECRET} ${SEED_ADMIN_PASSWORD}' < k8s/config-secret.yaml > k8s/config-secret.tmp.yaml
+          envsubst '${DB_PASSWORD} ${JWT_SECRET} ${SEED_ADMIN_PASSWORD} ${MAIL_USERNAME} ${MAIL_PASSWORD} ${MAIL_FROM}' < k8s/config-secret.yaml > k8s/config-secret.tmp.yaml
           mv k8s/config-secret.tmp.yaml k8s/config-secret.yaml
 
           # 2. Substitui o placeholder da Imagem Docker no 03-app.yaml
