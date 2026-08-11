@@ -44,6 +44,7 @@ public class PartService implements PartUseCase {
     public Part update(Long id, PartCommand command) {
         var part = findEntity(id);
         part.update(command.name(), command.sku(), command.unitPrice(), command.stockQuantity(), command.minStock(), command.active());
+        parts.save(part);
         return part;
     }
 

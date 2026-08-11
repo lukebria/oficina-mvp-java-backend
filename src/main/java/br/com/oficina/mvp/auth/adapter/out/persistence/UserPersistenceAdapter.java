@@ -16,12 +16,12 @@ class UserPersistenceAdapter implements UserRepositoryPort {
 
     @Override
     public Optional<User> findById(Long id) {
-        return jpaRepository.findById(id);
+        return jpaRepository.findById(id).map(UserMapper::toDomain);
     }
 
     @Override
     public Optional<User> findByEmail(String email) {
-        return jpaRepository.findByEmail(email);
+        return jpaRepository.findByEmail(email).map(UserMapper::toDomain);
     }
 
     @Override
@@ -31,6 +31,6 @@ class UserPersistenceAdapter implements UserRepositoryPort {
 
     @Override
     public User save(User user) {
-        return jpaRepository.save(user);
+        return UserMapper.toDomain(jpaRepository.save(UserMapper.toNewEntity(user)));
     }
 }

@@ -1,19 +1,18 @@
 package br.com.oficina.mvp.serviceorder.adapter.out.persistence;
 
-import br.com.oficina.mvp.serviceorder.domain.ServiceOrder;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
 
-interface ServiceOrderJpaRepository extends JpaRepository<ServiceOrder, Long> {
-    Optional<ServiceOrder> findByCode(String code);
+interface ServiceOrderJpaRepository extends JpaRepository<ServiceOrderJpaEntity, Long> {
+    Optional<ServiceOrderJpaEntity> findByCode(String code);
 
     boolean existsByCode(String code);
 
     @Query("""
-            SELECT so FROM ServiceOrder so
+            SELECT so FROM ServiceOrderJpaEntity so
             WHERE so.status NOT IN (
                 br.com.oficina.mvp.shared.domain.ServiceOrderStatus.FINALIZADA,
                 br.com.oficina.mvp.shared.domain.ServiceOrderStatus.ENTREGUE,
@@ -27,5 +26,5 @@ interface ServiceOrderJpaRepository extends JpaRepository<ServiceOrder, Long> {
                 ELSE 5
             END, so.createdAt ASC
             """)
-    List<ServiceOrder> findActiveOrderedByStatusPriority();
+    List<ServiceOrderJpaEntity> findActiveOrderedByStatusPriority();
 }

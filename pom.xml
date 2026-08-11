@@ -192,9 +192,9 @@
                         <configuration>
                             <includes>
                                 <include>br/com/oficina/mvp/shared/validation/*</include>
-                                <include>br/com/oficina/mvp/domains/ServiceOrderStatusPolicy*</include>
-                                <include>br/com/oficina/mvp/domains/ServiceOrder*</include>
-                                <include>br/com/oficina/mvp/services/*</include>
+                                <include>br/com/oficina/mvp/serviceorder/domain/ServiceOrderStatusPolicy*</include>
+                                <include>br/com/oficina/mvp/serviceorder/domain/ServiceOrder*</include>
+                                <include>br/com/oficina/mvp/*/application/*</include>
                             </includes>
                             <rules>
                                 <rule>

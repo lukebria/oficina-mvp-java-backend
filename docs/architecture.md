@@ -15,19 +15,21 @@ A arquitetura real do código é um **monolito modular organizado por módulos d
 src/main/java/br/com/oficina/mvp/
   OficinaMvpApplication.java
   <modulo>/
-    domain/                     entidade JPA e regras de domínio do módulo
+    domain/                     modelo de domínio puro (POJO, sem JPA) e regras de domínio do módulo
     application/                caso de uso (implementa as portas de entrada)
     application/port/in/        portas de entrada — interface de caso de uso + Command/Result
     application/port/out/       portas de saída — o que o módulo precisa de fora (ex: repositório)
     adapter/in/web/             adaptador de entrada — controller REST + DTOs de request/response
-    adapter/out/persistence/    adaptador de saída — repositório Spring Data (package-private) + adapter da porta
+    adapter/out/persistence/    adaptador de saída — entidade JPA (XJpaEntity) + mapper (XMapper) + repositório
+                                 Spring Data (package-private) + adapter da porta
   shared/
-    domain/     vocabulário compartilhado entre módulos (BaseEntity, enums Role e ServiceOrderStatus)
-    config/     CORS, Security, JWT properties, OpenAPI e seed
-    exception/  exceções e tratamento global de erro
-    security/   filtro JWT e serviço de geração/validação de token
-    validation/ validadores reutilizáveis de CPF/CNPJ e placa
-    api/        endpoints técnicos que não pertencem a um módulo de negócio (healthcheck)
+    domain/      vocabulário compartilhado entre módulos (BaseDomain, enums Role e ServiceOrderStatus)
+    persistence/ infraestrutura JPA compartilhada (BaseJpaEntity)
+    config/      CORS, Security, JWT properties, OpenAPI e seed
+    exception/   exceções e tratamento global de erro
+    security/    filtro JWT e serviço de geração/validação de token
+    validation/  validadores reutilizáveis de CPF/CNPJ e placa
+    api/         endpoints técnicos que não pertencem a um módulo de negócio (healthcheck)
 ```
 
 Módulos existentes hoje: `customer`, `vehicle`, `catalog` (entidade `ServiceCatalogItem`), `part`, `auth` (entidade
@@ -36,21 +38,26 @@ e `ServiceOrderStatusPolicy`) e `report`.
 
 Regras de dependência entre camadas:
 
-- **Domain** não depende de `application` nem de `adapter`. Continua anotado com JPA (`@Entity`) — pureza total de
-  domínio (sem framework) foi conscientemente deixada de fora do escopo, para não multiplicar o número de classes com
-  mapeamento manual entre entidade JPA e modelo de domínio.
+- **Domain** não depende de `application`, de `adapter` nem de nenhuma classe `jakarta.persistence`. É um POJO puro
+  — construtores, getters e métodos de negócio, sem `@Entity`/`@Column`/`@ManyToOne`/etc. A pureza total de domínio
+  foi alcançada movendo a anotação JPA para uma classe irmã (`XJpaEntity`) dentro do próprio adapter de persistência
+  do módulo, com um `XMapper` fazendo a conversão nos dois sentidos.
 - **Application** depende apenas de `domain` e das *portas* (`port.in`, `port.out`) — nunca de um `adapter` diretamente,
-  nem do `adapter` de outro módulo.
+  nem do `adapter` de outro módulo, nem de `jakarta.persistence`.
 - **Adapter** depende de `application` (via porta) e do próprio `domain`. Os adaptadores `in.web` fazem a conversão
-  DTO ↔ Command/domínio; os adaptadores `out.persistence` implementam a porta de saída delegando para uma interface
-  Spring Data `JpaRepository` package-private (não exposta fora do pacote de persistência).
+  DTO ↔ Command/domínio; os adaptadores `out.persistence` implementam a porta de saída convertendo domínio ↔
+  `XJpaEntity` via `XMapper`, e delegando a persistência física para uma interface Spring Data `JpaRepository<XJpaEntity, Long>`
+  package-private (não exposta fora do pacote de persistência). Ver seção 4.9 para o detalhamento desse padrão.
 - Quando um módulo precisa de outro (ex: `serviceorder` precisa buscar `Customer`, `Vehicle`, `ServiceCatalogItem` e
   `Part`), ele depende da **porta** do módulo alheio (`CustomerRepositoryPort`, `VehicleUseCase` etc.), nunca da
   implementação concreta ou do repositório Spring Data do outro módulo. Isso é o que garante que trocar a persistência
-  de um módulo não obriga a mudar nada nos módulos que dependem dele.
-- `Role` e `ServiceOrderStatus` (enums) e `BaseEntity` (superclasse JPA com `id`/`createdAt`/`updatedAt`) são
-  vocabulário/infraestrutura genuinamente compartilhados entre módulos e ficam em `shared.domain`, não dentro de um
-  módulo específico.
+  de um módulo não obriga a mudar nada nos módulos que dependem dele. A única exceção controlada a essa regra é que
+  o `XMapper` de um agregado que embute objetos de outro módulo (ex: `ServiceOrderMapper` embutindo `Customer` e
+  `Vehicle`) importa o `XJpaEntity`/`XMapper` *do adapter de persistência* do outro módulo — nunca o `domain` nem o
+  `application` alheios — para poder montar o grafo completo. Ver seção 4.9.
+- `Role` e `ServiceOrderStatus` (enums) e `BaseDomain` (superclasse pura com `id`/`createdAt`/`updatedAt`) são
+  vocabulário genuinamente compartilhado entre módulos e ficam em `shared.domain`. A contraparte JPA de `BaseDomain`
+  é `shared.persistence.BaseJpaEntity`, usada pelas classes `XJpaEntity` de cada módulo.
 
 ## 2. Stack técnica
 
@@ -112,16 +119,16 @@ desabilitado em `src/test/resources/application-test.yml`.
 ## 4. Módulos e responsabilidades
 
 Cada módulo segue o mesmo esqueleto: `domain` → `application` (implementa `port.in`, depende de `port.out`) →
-`adapter.in.web` (controller + DTOs) e `adapter.out.persistence` (repositório Spring Data + adapter da porta).
-As tabelas abaixo listam só as classes com nome/responsabilidade específicos de cada módulo — a "receita" do adapter
-de persistência (`XJpaRepository` + `XPersistenceAdapter`, ambos package-private) se repete em todos e não é listada
-de novo em cada seção.
+`adapter.in.web` (controller + DTOs) e `adapter.out.persistence` (entidade JPA + mapper + repositório Spring Data +
+adapter da porta). As tabelas abaixo listam só as classes com nome/responsabilidade específicos de cada módulo — a
+"receita" do adapter de persistência (`XJpaEntity` + `XMapper` + `XJpaRepository` + `XPersistenceAdapter`) se repete
+em todos e está detalhada uma única vez na seção 4.9, em vez de repetida em cada módulo.
 
 ### 4.1 `customer`
 
 | Classe                                                             | Camada               | Responsabilidade                                                     |
 |----------------------------------------------------------------------|-----------------------|--------------------------------------------------------------------------|
-| `Customer`                                                            | domain                | Entidade JPA (`customers`), documento normalizado                       |
+| `Customer`                                                            | domain                | Modelo de domínio puro (POJO), documento normalizado                    |
 | `CustomerUseCase` / `CustomerCommand`                                 | application.port.in   | Porta de entrada e comando de create/update                             |
 | `CustomerRepositoryPort`                                              | application.port.out  | Porta de saída (`findByDocument`, `save`, `delete`...)                  |
 | `CustomerService`                                                     | application           | Implementa `CustomerUseCase`; valida CPF/CNPJ                           |
@@ -131,18 +138,18 @@ de novo em cada seção.
 
 | Classe                                                           | Camada               | Responsabilidade                                                       |
 |---------------------------------------------------------------------|-----------------------|------------------------------------------------------------------------|
-| `Vehicle`                                                            | domain                | Entidade JPA (`vehicles`), vinculada a `Customer`, placa normalizada    |
+| `Vehicle`                                                            | domain                | Modelo de domínio puro (POJO), vinculado a `Customer` (objeto completo), placa normalizada |
 | `VehicleUseCase` / `VehicleCommand`                                  | application.port.in   | Porta de entrada e comando de create/update                            |
 | `VehicleRepositoryPort`                                              | application.port.out  | Porta de saída (`findByPlate`, `save`, `delete`...)                    |
 | `VehicleService`                                                     | application           | Implementa `VehicleUseCase`; depende de `CustomerUseCase` (módulo `customer`) para achar o dono do veículo |
 | `VehicleController` / `VehicleRequestDto` / `VehicleResponseDto`     | adapter.in.web        | `/api/vehicles` — CRUD de veículos                                      |
-| `VehicleJpaRepository` / `VehiclePersistenceAdapter`                 | adapter.out.persistence | O adapter inicializa (`Hibernate.initialize`) a associação `LAZY` `customer` antes de retornar, já que `VehicleResponseDto` a acessa fora da transação (`open-in-view: false`) |
+| `VehicleJpaEntity` / `VehicleMapper` / `VehicleJpaRepository` / `VehiclePersistenceAdapter` | adapter.out.persistence | `VehicleMapper` monta `Vehicle` com o `Customer` completo usando `CustomerMapper` (a associação `customer` é `LAZY` na entidade). A classe do adapter é `@Transactional` para garantir sessão Hibernate durante essa montagem — ver seção 4.9 |
 
 ### 4.3 `catalog`
 
 | Classe                                                                                  | Camada               | Responsabilidade                                          |
 |-----------------------------------------------------------------------------------------|-----------------------|-------------------------------------------------------------|
-| `ServiceCatalogItem`                                                                     | domain                | Entidade JPA (`service_catalog_items`)                      |
+| `ServiceCatalogItem`                                                                     | domain                | Modelo de domínio puro (POJO)                               |
 | `CatalogUseCase` / `CatalogCommand`                                                      | application.port.in   | Porta de entrada e comando de create/update                 |
 | `CatalogRepositoryPort`                                                                  | application.port.out  | Porta de saída (inclui `count()`, usado pelo `DataSeeder`)   |
 | `CatalogService`                                                                         | application           | Implementa `CatalogUseCase`                                 |
@@ -152,7 +159,7 @@ de novo em cada seção.
 
 | Classe                                                       | Camada               | Responsabilidade                                                       |
 |-----------------------------------------------------------------|-----------------------|------------------------------------------------------------------------|
-| `Part`                                                           | domain                | Entidade JPA (`parts`); `decrementStock` valida estoque insuficiente   |
+| `Part`                                                           | domain                | Modelo de domínio puro (POJO); `decrementStock` valida estoque insuficiente |
 | `PartUseCase` / `PartCommand`                                    | application.port.in   | Porta de entrada e comando de create/update                            |
 | `PartRepositoryPort`                                             | application.port.out  | Porta de saída (inclui `count()`, usado pelo `DataSeeder`)              |
 | `PartService`                                                    | application           | Implementa `PartUseCase`                                               |
@@ -162,7 +169,7 @@ de novo em cada seção.
 
 | Classe                                                    | Camada               | Responsabilidade                                                          |
 |----------------------------------------------------------|-----------------------|-------------------------------------------------------------------------------|
-| `User`                                                    | domain                | Entidade JPA (`users`)                                                       |
+| `User`                                                    | domain                | Modelo de domínio puro (POJO)                                                |
 | `AuthUseCase` / `LoginCommand` / `AuthResult`             | application.port.in   | Porta de entrada; `AuthResult` carrega token + usuário autenticado           |
 | `UserRepositoryPort`                                      | application.port.out  | Porta de saída (`findByEmail`, `existsByEmail`, `findById`, `save`)          |
 | `AuthService`                                              | application           | Valida credenciais com `PasswordEncoder` e gera JWT via `JwtService` (`shared.security`) |
@@ -178,9 +185,9 @@ Módulo mais complexo: é o único agregado que orquestra os quatro módulos ant
 
 | Classe                                                                                                                                              | Camada               | Responsabilidade                                                        |
 |--------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------|-------------------------------------------------------------------------|
-| `ServiceOrder`                                                                                                                                      | domain                | Agregado principal; calcula totais, registra histórico e altera status  |
-| `WorkOrderService` / `WorkOrderPart` / `WorkOrderLineItem`                                                                                          | domain                | Itens de serviço/peça da OS com preço congelado; `WorkOrderLineItem` é a superclasse comum (`@MappedSuperclass`) |
-| `ServiceOrderStatusHistory`                                                                                                                         | domain                | Histórico de mudança de status                                          |
+| `ServiceOrder`                                                                                                                                      | domain                | Agregado principal (POJO puro); calcula totais, registra histórico e altera status; embute `Customer` e `Vehicle` completos |
+| `WorkOrderService` / `WorkOrderPart` / `WorkOrderLineItem`                                                                                          | domain                | Itens de serviço/peça da OS com preço congelado (POJO puro); `WorkOrderLineItem` é a superclasse comum; embutem `ServiceCatalogItem`/`Part` completos |
+| `ServiceOrderStatusHistory`                                                                                                                         | domain                | Histórico de mudança de status (POJO puro)                              |
 | `ServiceOrderStatusPolicy`                                                                                                                          | domain                | Define transições de status permitidas                                  |
 | `ServiceOrderUseCase` / `CreateServiceOrderCommand`                                                                                                 | application.port.in   | Porta administrativa: listar, criar, aprovar, trocar status, preencher diagnóstico |
 | `PublicServiceOrderUseCase`                                                                                                                         | application.port.in   | Porta pública: consulta e aprovação pelo cliente                        |
@@ -189,7 +196,9 @@ Módulo mais complexo: é o único agregado que orquestra os quatro módulos ant
 | `ServiceOrderController`                                                                                                                            | adapter.in.web        | `/api/service-orders` — fluxo administrativo                             |
 | `PublicServiceOrderController`                                                                                                                      | adapter.in.web        | `/api/public/service-orders` — consulta e aprovação pública              |
 | `CreateServiceOrderRequestDto`, `ServiceOrderResponseDto`, `PublicServiceOrderResponseDto`, `UpdateStatusRequestDto`, `UpdateDiagnosisRequestDto`, `CustomerApprovalRequestDto` | adapter.in.web        | DTOs de request/response do módulo                                       |
-| `ServiceOrderJpaRepository` / `ServiceOrderPersistenceAdapter`                                                                                      | adapter.out.persistence | Além de delegar ao Spring Data, o adapter inicializa (`Hibernate.initialize`) as associações `LAZY` da OS (cliente, veículo, serviços, peças, histórico) antes de retornar, já que `open-in-view` é `false` e o mapeamento para DTO acontece no controller, fora da transação |
+| `ServiceOrderJpaEntity` + `WorkOrderServiceJpaEntity` / `WorkOrderPartJpaEntity` / `WorkOrderLineItemJpaEntity` / `ServiceOrderStatusHistoryJpaEntity` | adapter.out.persistence | Entidades JPA equivalentes ao agregado, isoladas do domínio |
+| `ServiceOrderMapper`                                                                                                                                | adapter.out.persistence | Monta o `ServiceOrder` puro navegando as associações `LAZY` da entidade (cliente, veículo, serviços→catálogo, peças→peça, histórico), usando `CustomerMapper`/`VehicleMapper`/`ServiceCatalogItemMapper`/`PartMapper`. Na inserção, usa `EntityManager.getReference(...)` para linkar as FKs de agregados já persistidos sem SELECT extra. Ver seção 4.9 |
+| `ServiceOrderJpaRepository` / `ServiceOrderPersistenceAdapter`                                                                                      | adapter.out.persistence | O adapter é `@Transactional` na classe — garante sessão Hibernate viva durante toda a montagem do domínio pelo mapper, independentemente de quem chama (service ou, em testes, o port direto) |
 
 ### 4.7 `report`
 
@@ -208,7 +217,8 @@ Pacote: `br.com.oficina.mvp.shared` — recursos transversais que não pertencem
 
 | Classe/pacote                      | Responsabilidade                                                                 |
 |--------------------------------------|------------------------------------------------------------------------------------|
-| `shared.domain.BaseEntity`           | Superclasse JPA com `id`, `createdAt`, `updatedAt`, usada por todas as entidades   |
+| `shared.domain.BaseDomain`           | Superclasse pura (sem JPA) com `id`, `createdAt`, `updatedAt`, usada por todo modelo de domínio |
+| `shared.persistence.BaseJpaEntity`   | Superclasse JPA (`@MappedSuperclass`) com `id`/`createdAt`/`updatedAt`, usada por toda `XJpaEntity` |
 | `shared.domain.Role`                 | Enum de papel do usuário (`ADMIN`, `ATTENDANT`, `MECHANIC`)                        |
 | `shared.domain.ServiceOrderStatus`   | Enum de status da OS, usado pelo módulo `serviceorder` e por quem consulta o status |
 | `SecurityConfig`                     | Configuração de segurança, CORS, sessão stateless, rotas públicas e filtro JWT      |
@@ -224,6 +234,43 @@ Pacote: `br.com.oficina.mvp.shared` — recursos transversais que não pertencem
 | `GlobalExceptionHandler`             | Padronização de erros HTTP                                                          |
 | `ApiError`                           | Contrato de erro retornado pela API                                                 |
 | `shared.api.HealthController`        | `/api/health` — healthcheck simples da API                                          |
+
+### 4.9 Padrão de persistência: domínio puro + `XJpaEntity` + `XMapper`
+
+Todo módulo segue a mesma receita dentro de `adapter/out/persistence`, para manter o `domain` livre de framework:
+
+- **`XJpaEntity`**: espelha o `domain` com anotações JPA (`@Entity`, `@Table`, `@Column`, `@ManyToOne`, `@OneToMany`),
+  estendendo `shared.persistence.BaseJpaEntity`. Não tem lógica de negócio — só mapeamento de coluna/relacionamento.
+- **`XMapper`**: classe final com métodos estáticos, sem estado, sem dependência de Spring — `toDomain(entity)`,
+  `toNewEntity(domain)` (insert) e `applyToEntity(domain, entity)` (update, copia campos mutáveis para uma entidade
+  já gerenciada). É `public` quando outro módulo precisa montar o objeto embutido (ex: `CustomerMapper`,
+  `VehicleMapper`, `PartMapper`, `ServiceCatalogItemMapper` são públicos porque `ServiceOrderMapper` os usa para
+  montar os campos `customer`, `vehicle` e os itens da OS); fica package-private quando ninguém de fora precisa
+  (`UserMapper`, `ServiceOrderMapper`).
+- **`XJpaRepository`**: interface Spring Data `JpaRepository<XJpaEntity, Long>`, package-private.
+- **`XPersistenceAdapter`**: implementa a porta de saída (`XRepositoryPort`) em termos de `domain`. Por dentro,
+  converte para `XJpaEntity` via `XMapper`, delega ao `XJpaRepository`, e converte a resposta de volta para `domain`.
+
+Duas decisões de implementação valem a pena registrar, porque não são óbvias e já geraram um bug real durante o
+refactor que introduziu esse padrão:
+
+1. **Ligação de FK entre agregados usa `EntityManager.getReference(...)`, não um `SELECT` completo.** Quando
+   `ServiceOrderMapper.toNewEntity` precisa anexar o `Customer`/`Vehicle`/`ServiceCatalogItem`/`Part` já persistidos
+   como FK da nova `ServiceOrderJpaEntity`, ele pede um proxy via `entityManager.getReference(XJpaEntity.class, id)`
+   em vez de buscar a entidade inteira — o `domain` já tem todos os dados que precisa (veio de `Customer`/`Vehicle`
+   já resolvidos em `ServiceOrderService`), só falta o vínculo de FK no banco.
+2. **Adapters que montam grafo com associação `LAZY` (`VehiclePersistenceAdapter`, `ServiceOrderPersistenceAdapter`)
+   são `@Transactional` na própria classe**, e não apenas confiam no `@Transactional` do `application` service.
+   Isso importa porque vários testes de integração chamam o *port* diretamente (via `@Autowired XRepositoryPort`),
+   sem passar pelo service — sem uma transação própria no adapter, o `XMapper` tentaria inicializar um proxy
+   Hibernate (seja o retornado por `getReferenceById`/`getReference`, seja uma associação `LAZY` lida em
+   `toDomain`) depois que a sessão que o Spring Data abriu internamente para `save()`/`findById()` já tinha
+   fechado, resultando em `LazyInitializationException: no session`. Um módulo novo com agregados que embutem
+   objetos de outro módulo precisa do mesmo cuidado.
+
+Como consequência do item 2, os `*PersistenceAdapter` que só leem/escrevem campos escalares do próprio módulo
+(`CustomerPersistenceAdapter`, `PartPersistenceAdapter`, `CatalogPersistenceAdapter`, `UserPersistenceAdapter`) não
+precisam de `@Transactional` — não têm associação `LAZY` nem usam `EntityManager.getReference`.
 
 ## 5. Segurança
 
@@ -524,11 +571,12 @@ ServiceOrderNotificationPort.notifyStatusChanged(order)
   -> implementada por ServiceOrderStatusNotificationAdapter (serviceorder.adapter.out.notification)
 ```
 
-O canal definido é e-mail (`order.getCustomer().getEmail()`). Nesta primeira etapa do MVP, o adapter apenas loga a
-notificação (sem envio real); como é uma porta de saída, trocar por um envio real de e-mail (SMTP, provedor
-transacional etc.) é uma questão de implementar um novo adapter para `ServiceOrderNotificationPort`, sem alterar
-domínio nem application. Se o cliente não tiver e-mail cadastrado (campo opcional em `Customer`), o adapter loga um
-aviso e não falha a operação.
+O canal definido é e-mail (`order.getCustomer().getEmail()`). O adapter envia o e-mail de fato via `JavaMailSender`
+(SMTP, `smtp.gmail.com` por padrão, configurável por `MAIL_HOST`/`MAIL_PORT`/`MAIL_USERNAME`/`MAIL_PASSWORD`/
+`MAIL_FROM`); como é uma porta de saída, trocar por outro canal (provedor transacional, SMS etc.) é uma questão de
+implementar um novo adapter para `ServiceOrderNotificationPort`, sem alterar domínio nem application. Se o cliente
+não tiver e-mail cadastrado (campo opcional em `Customer`) ou o envio falhar (`MailException`), o adapter loga um
+aviso/erro e não falha a operação.
 
 Chamada apenas nos pontos que efetivamente mudam o status (não em `updateDiagnosis`), e condicionada ao status
 resultante ser diferente de `RECUSADA`:
@@ -650,23 +698,22 @@ O `docker-compose.yml` sobe:
 
 Estes pontos refletem o estado atual do código e podem ser úteis para manutenção futura:
 
-1. O domínio permanece anotado com JPA (`@Entity`) dentro de cada módulo — não há separação entre entidade de
-   persistência e modelo de domínio puro. Essa foi uma escolha pragmática para não multiplicar classes de mapeamento;
-   se o projeto crescer a ponto de precisar de modelos de leitura/escrita distintos, essa é a primeira fronteira a
-   revisar.
+1. O domínio de cada módulo é um POJO puro, sem nenhuma anotação JPA — a separação entre entidade de persistência
+   (`XJpaEntity`) e modelo de domínio (`domain`) já foi feita, com um `XMapper` fazendo a conversão (seção 4.9). Ao
+   adicionar um módulo novo, siga essa mesma receita em vez de anotar a classe de `domain` diretamente.
 2. A segurança carrega role no JWT e no `SecurityContext`, e os endpoints usam autorização granular por perfil via
    `hasRole`/`hasAnyRole` em `SecurityConfig` — matriz completa na seção 5 ("Autorização por perfil"), coberta por
    `AuthorizationIntegrationTest`.
 3. O módulo `report` não tem `domain` nem `adapter.out.persistence` próprios — ele lê diretamente pela porta de saída
    do módulo `serviceorder` (`ServiceOrderRepositoryPort`). É uma exceção deliberada ao esqueleto padrão dos módulos,
    já que `report` é puramente um caso de uso de leitura sobre dados de outro módulo.
-4. `open-in-view` é `false` e o mapeamento DTO acontece no adapter web, fora da transação da camada `application`.
-   Por isso, os adapters de persistência que retornam entidades com associações `LAZY` acessadas pelo DTO
-   (`serviceorder`, `vehicle` — as únicas duas hoje, confirmado por auditoria de todos os `@ManyToOne`/`@OneToMany`
-   do projeto) precisam inicializá-las explicitamente (`Hibernate.initialize`) antes de retornar — ver
-   `ServiceOrderPersistenceAdapter` e `VehiclePersistenceAdapter`. Um módulo novo com relações `LAZY` expostas no
-   response precisa do mesmo cuidado, senão a chamada falha com `LazyInitializationException` (HTTP 500). O teste
-   `LazyAssociationSerializationIntegrationTest` (seção 10) existe para pegar essa regressão automaticamente.
+4. `open-in-view` é `false`, e o mapeamento domínio ↔ entidade acontece dentro do próprio `XPersistenceAdapter`
+   (não mais no controller). Os adapters que embutem objetos de outro módulo e navegam associações `LAZY` para
+   montar o grafo (`serviceorder`, `vehicle` — as únicas duas hoje) são `@Transactional` na própria classe, para
+   garantir uma sessão Hibernate viva durante toda a montagem — ver seção 4.9. Um módulo novo com relações `LAZY`
+   acessadas pelo mapper precisa do mesmo cuidado, senão a chamada falha com `LazyInitializationException` (HTTP
+   500). O teste `LazyAssociationSerializationIntegrationTest` (seção 10) existe para pegar essa regressão
+   automaticamente.
 5. Geração do código da OS: `ServiceOrderService.generateUniqueOrderCode()` checa `existsByCode` antes de montar a OS
    e regenera o código em caso de colisão, até 5 tentativas (`MAX_CODE_GENERATION_ATTEMPTS`); esgotadas as tentativas,
    lança `BusinessException` (`409 Conflict`). O retry acontece **antes** do `save()`, não depois de uma falha real
