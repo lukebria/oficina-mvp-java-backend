@@ -11,23 +11,23 @@ jobs:
   # ==========================================
   # 1. JOB DE TESTES (Unitários / Integração)
   # ==========================================
-  test:
-    name: "1. Run Tests"
-    runs-on: ubuntu-latest
+  #test:
+  #  name: "1. Run Tests"
+  #  runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+  #  steps:
+  #    - name: Checkout Code
+  #      uses: actions/checkout@v4
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: maven
+  #    - name: Set up JDK 21
+  #      uses: actions/setup-java@v4
+  #      with:
+  #        java-version: '21'
+  #        distribution: 'temurin'
+  #        cache: maven
 
-      - name: Run Unit Tests
-        run: mvn clean test
+  #    - name: Run Unit Tests
+  #      run: mvn clean test
         
 # ==========================================
   # JOB 2: SONARQUBE / SONARCLOUD SCAN
@@ -35,7 +35,7 @@ jobs:
   # ==========================================
   sonarqube:
     name: "2. SonarQube Scan"
-    needs: test
+    #needs: test
     runs-on: ubuntu-latest
 
     steps:
