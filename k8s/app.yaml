@@ -24,10 +24,10 @@ spec:
           # =========================================================
           resources:
             requests:
-              cpu: "50m"      # 0.1 de um núcleo de CPU
+              cpu: "100m"      # 0.1 de um núcleo de CPU
               memory: "128Mi"  # Memória inicial
             limits:
-              cpu: "50m"      # Máximo de 0.5 de CPU
+              cpu: "100m"      # Máximo de 0.5 de CPU
               memory: "128Mi"  # Limite máximo de RAM
           env:
             - name: APP_PORT
