@@ -64,6 +64,13 @@ jobs:
       - name: PMD (code analysis)
         run: ./mvnw pmd:check
 
+      - name: Publicar relatório PMD
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pmd-report
+          path: target/pmd.xml
+
       - name: SpotBugs (bug detection)
         run: ./mvnw spotbugs:check
 
