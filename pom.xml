@@ -177,7 +177,7 @@
                 <configuration>
                     <failOnViolation>true</failOnViolation>
                     <rulesets>
-                        <ruleset>/rulesets/java/quickstart.xml</ruleset>
+                        <ruleset>category/java/errorprone.xml</ruleset>
                     </rulesets>
                 </configuration>
             </plugin>
