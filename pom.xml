@@ -14,7 +14,7 @@
 
     <groupId>br.com.oficina</groupId>
     <artifactId>oficina-mvp-backend</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <name>oficina-mvp-backend</name>
     <description>MVP backend de oficina mecânica com Spring Boot 4, Java 21, PostgreSQL, DDD pragmático e JWT.
     </description>
