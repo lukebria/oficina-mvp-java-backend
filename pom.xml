@@ -14,9 +14,9 @@
 
     <groupId>br.com.oficina</groupId>
     <artifactId>oficina-mvp-backend</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <name>oficina-mvp-backend</name>
-    <description>MVP backend de oficina mecânica com Spring Boot 4, Java 25, PostgreSQL, DDD pragmático e JWT.
+    <description>MVP backend de oficina mecânica com Spring Boot 4, Java 21, PostgreSQL, DDD pragmático e JWT.
     </description>
 
     <properties>
@@ -161,6 +161,12 @@
                     <release>21</release>
                     <parameters>true</parameters>
                 </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>5.0.0.4389</version>
             </plugin>
 
             <plugin>

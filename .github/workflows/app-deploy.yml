@@ -119,6 +119,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, Tag and Push Image to Amazon ECR
+        id: build-push
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: oficina-mecnica-lab
@@ -127,6 +128,7 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "ecr_registry=$ECR_REGISTRY" >> "$GITHUB_OUTPUT"
 
 # ==========================================
   # JOB 4: DEPLOY
