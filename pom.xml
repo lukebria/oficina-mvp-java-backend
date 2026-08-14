@@ -16,17 +16,13 @@
     <artifactId>oficina-mvp-backend</artifactId>
     <version>1.0.0</version>
     <name>oficina-mvp-backend</name>
-    <description>MVP backend de oficina mecânica com Spring Boot 4, Java 25, PostgreSQL, DDD pragmático e JWT.
+    <description>MVP backend de oficina mecânica com Spring Boot 4, Java 21, PostgreSQL, DDD pragmático e JWT.
     </description>
 
     <properties>
         <java.version>21</java.version>
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>3.0.3</springdoc.version>
-        <!-- SonarCloud -->
-        <sonar.projectKey>seu-project-key</sonar.projectKey>
-        <sonar.organization>sua-organizacao</sonar.organization>
-        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
     </properties>
 
     <dependencies>
@@ -165,6 +161,12 @@
                     <release>21</release>
                     <parameters>true</parameters>
                 </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>5.0.0.4389</version>
             </plugin>
 
             <plugin>
