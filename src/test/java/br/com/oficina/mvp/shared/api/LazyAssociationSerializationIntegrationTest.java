@@ -72,8 +72,10 @@ class LazyAssociationSerializationIntegrationTest {
 
     @Test
     void shouldSerializeVehicleListAndDetailWithoutLazyInitializationException() throws Exception {
-        var customer = customers.save(new Customer("João Silva", "52998224725", "joao@teste.com", "11999999999"));
-        var vehicle = vehicles.save(new Vehicle(customer, "ABC1234", "Fiat", "Uno", 2020));
+        var nanos = String.valueOf(System.nanoTime());
+        var customer = customers.save(new Customer("João Silva", uniqueDocument(nanos), "joao-" + nanos + "@teste.com", "11999999999"));
+        var plate = "V" + nanos.substring(nanos.length() - 6);
+        var vehicle = vehicles.save(new Vehicle(customer, plate, "Fiat", "Uno", 2020));
 
         // A lista mistura dados de tod méthodo de teste desta classe (mesmo H2, ordem de execução não garantida);
         // o ponto aqui é só confirmar que a serialização não estoura LazyInitializationException.
@@ -87,12 +89,17 @@ class LazyAssociationSerializationIntegrationTest {
 
     @Test
     void shouldSerializeServiceOrderListAndDetailWithoutLazyInitializationException() throws Exception {
-        var customer = customers.save(new Customer("Maria Souza", "11144477735", "maria@teste.com", "11988888888"));
-        var vehicle = vehicles.save(new Vehicle(customer, "XYZ9A87", "Toyota", "Corolla", 2022));
-        var catalogItem = catalog.save(new ServiceCatalogItem("Troca de óleo", "Completa", new BigDecimal("180.00"), 60, true));
-        var part = parts.save(new Part("Filtro de óleo", "FLT-LAZY-001", new BigDecimal("45.90"), 10, 2, true));
+        var nanos = String.valueOf(System.nanoTime());
+        var document = uniqueDocument(nanos);
+        var plate = "X" + nanos.substring(nanos.length() - 6);
+        var orderCode = "OS-LAZY-" + nanos;
+        var serviceName = "Troca de oleo " + nanos;
+        var customer = customers.save(new Customer("Maria Souza", document, "maria-" + nanos + "@teste.com", "11988888888"));
+        var vehicle = vehicles.save(new Vehicle(customer, plate, "Toyota", "Corolla", 2022));
+        var catalogItem = catalog.save(new ServiceCatalogItem(serviceName, "Completa", new BigDecimal("180.00"), 60, true));
+        var part = parts.save(new Part("Filtro de óleo", "FLT-LAZY-" + nanos, new BigDecimal("45.90"), 10, 2, true));
 
-        var order = new ServiceOrder("OS-LAZY-TEST", customer, vehicle, "Barulho no motor");
+        var order = new ServiceOrder(orderCode, customer, vehicle, "Barulho no motor");
         order.addService(new WorkOrderService(catalogItem, 1));
         order.addPart(new WorkOrderPart(part, 1));
         order.markBudgetWaitingApproval();
@@ -106,14 +113,19 @@ class LazyAssociationSerializationIntegrationTest {
         mvc.perform(get("/api/service-orders/" + saved.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.customer.name").value("Maria Souza"))
-                .andExpect(jsonPath("$.vehicle.plate").value("XYZ9A87"))
-                .andExpect(jsonPath("$.services[0].name").value("Troca de óleo"))
+                .andExpect(jsonPath("$.vehicle.plate").value(plate))
+                .andExpect(jsonPath("$.services[0].name").value(serviceName))
                 .andExpect(jsonPath("$.parts[0].name").value("Filtro de óleo"))
                 .andExpect(jsonPath("$.history").isArray());
 
-        mvc.perform(get("/api/public/service-orders/OS-LAZY-TEST?document=11144477735"))
+        mvc.perform(get("/api/public/service-orders/" + orderCode + "?document=" + document))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.customerName").value("Maria Souza"))
-                .andExpect(jsonPath("$.services[0].name").value("Troca de óleo"));
+                .andExpect(jsonPath("$.services[0].name").value(serviceName));
+    }
+
+    /** H2 em memória é compartilhado entre testes de integração; evita colisão em UNIQUE(document). */
+    private static String uniqueDocument(String nanos) {
+        return nanos.substring(nanos.length() - 11);
     }
 }

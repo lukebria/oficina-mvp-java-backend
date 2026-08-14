@@ -68,6 +68,12 @@ class AuthorizationIntegrationTest {
         return jwtService.generate(user);
     }
 
+    /** H2 em memória é compartilhado entre testes de integração; evita colisão em UNIQUE(document). */
+    private static String uniqueDocument() {
+        var nanos = String.valueOf(System.nanoTime());
+        return nanos.substring(nanos.length() - 11);
+    }
+
     @Test
     void shouldAllowAllThreeRolesToListCustomers() throws Exception {
         mvc.perform(get("/api/customers").header("Authorization", "Bearer " + adminToken)).andExpect(status().isOk());
@@ -77,7 +83,7 @@ class AuthorizationIntegrationTest {
 
     @Test
     void shouldRestrictCustomerDeletionToAdmin() throws Exception {
-        var customer = customers.save(new Customer("Del Teste", "11144477735", "del@teste.com", "11999999999"));
+        var customer = customers.save(new Customer("Del Teste", uniqueDocument(), "del-" + System.nanoTime() + "@teste.com", "11999999999"));
 
         mvc.perform(delete("/api/customers/" + customer.getId()).header("Authorization", "Bearer " + mechanicToken))
                 .andExpect(status().isForbidden());
@@ -90,8 +96,8 @@ class AuthorizationIntegrationTest {
     @Test
     void shouldRestrictCatalogCreationToAdmin() throws Exception {
         var payload = """
-                {"name":"Servico Authz Teste","description":"desc","basePrice":10.00,"estimatedMinutes":10,"active":true}
-                """;
+                {"name":"Servico Authz %s","description":"desc","basePrice":10.00,"estimatedMinutes":10,"active":true}
+                """.formatted(System.nanoTime());
 
         mvc.perform(post("/api/services").header("Authorization", "Bearer " + mechanicToken)
                         .contentType(MediaType.APPLICATION_JSON).content(payload))
@@ -106,9 +112,10 @@ class AuthorizationIntegrationTest {
 
     @Test
     void shouldAllowAdminAndMechanicButNotAttendantToApproveServiceOrder() throws Exception {
-        var customer = customers.save(new Customer("Aprov Teste", "93541134780", "aprov@teste.com", "11988888888"));
-        var vehicle = vehicles.save(new Vehicle(customer, "APV1234", "Ford", "Ka", 2021));
-        var order = new ServiceOrder("OS-AUTHZ-TEST", customer, vehicle, null);
+        var nanos = String.valueOf(System.nanoTime());
+        var customer = customers.save(new Customer("Aprov Teste", uniqueDocument(), "aprov-" + nanos + "@teste.com", "11988888888"));
+        var vehicle = vehicles.save(new Vehicle(customer, "A" + nanos.substring(nanos.length() - 6), "Ford", "Ka", 2021));
+        var order = new ServiceOrder("OS-AUTHZ-" + nanos, customer, vehicle, null);
         order.markBudgetWaitingApproval();
         var saved = serviceOrders.save(order);
 
