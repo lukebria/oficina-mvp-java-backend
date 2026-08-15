@@ -87,7 +87,9 @@ class LazyAssociationSerializationIntegrationTest {
 
     @Test
     void shouldSerializeServiceOrderListAndDetailWithoutLazyInitializationException() throws Exception {
-        var customer = customers.save(new Customer("Maria Souza", "11144477735", "maria@teste.com", "11988888888"));
+        var nanos = String.valueOf(System.nanoTime());
+        var uniqueDocument = nanos.substring(nanos.length() - 11);
+        var customer = customers.save(new Customer("Maria Souza", uniqueDocument, "maria@teste.com", "11988888888"));
         var vehicle = vehicles.save(new Vehicle(customer, "XYZ9A87", "Toyota", "Corolla", 2022));
         var catalogItem = catalog.save(new ServiceCatalogItem("Troca de óleo", "Completa", new BigDecimal("180.00"), 60, true));
         var part = parts.save(new Part("Filtro de óleo", "FLT-LAZY-001", new BigDecimal("45.90"), 10, 2, true));
@@ -111,7 +113,7 @@ class LazyAssociationSerializationIntegrationTest {
                 .andExpect(jsonPath("$.parts[0].name").value("Filtro de óleo"))
                 .andExpect(jsonPath("$.history").isArray());
 
-        mvc.perform(get("/api/public/service-orders/OS-LAZY-TEST?document=11144477735"))
+        mvc.perform(get("/api/public/service-orders/OS-LAZY-TEST?document=" + uniqueDocument))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.customerName").value("Maria Souza"))
                 .andExpect(jsonPath("$.services[0].name").value("Troca de óleo"));

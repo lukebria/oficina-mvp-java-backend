@@ -77,7 +77,9 @@ class AuthorizationIntegrationTest {
 
     @Test
     void shouldRestrictCustomerDeletionToAdmin() throws Exception {
-        var customer = customers.save(new Customer("Del Teste", "11144477735", "del@teste.com", "11999999999"));
+        var nanos = String.valueOf(System.nanoTime());
+        var uniqueDocument = nanos.substring(nanos.length() - 11);
+        var customer = customers.save(new Customer("Del Teste", uniqueDocument, "del@teste.com", "11999999999"));
 
         mvc.perform(delete("/api/customers/" + customer.getId()).header("Authorization", "Bearer " + mechanicToken))
                 .andExpect(status().isForbidden());
