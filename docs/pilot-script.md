@@ -29,37 +29,36 @@ export BASE_URL="http://localhost:3000"
 
 ## Executar tudo de uma vez (para a gravação)
 
-Duas formas prontas de rodar o roteiro inteiro com um clique/comando:
+Duas formas prontas de rodar o roteiro inteiro com um clique/comando: script de terminal ou
+collection do Postman. Escolha uma — fazem exatamente a mesma sequência de chamadas.
 
-- **Postman**: importe [`docs/pilot-collection.postman_collection.json`](pilot-collection.postman_collection.json)
-  e use **Run collection** — executa as 10 requisições em ordem, encadeando token/ids
-  automaticamente entre elas via scripts de teste, com asserts visuais (✔/✘) de status HTTP e de
-  status da OS em cada etapa. Ajuste as variáveis da collection (aba *Variables*) antes de rodar —
-  principalmente `baseUrl` e `customerEmail`.
-- **Terminal**: o script [`docs/pilot-script.sh`](pilot-script.sh) roda a mesma sequência completa
-  (login → cliente → veículo → serviço → peça → OS → aprovação pelo cliente → finalização →
-  entrega → conferência) de ponta a ponta com um único comando. Imprime cada chamada, o corpo da
-  resposta e o status HTTP, e para imediatamente com a resposta do erro se algo quebrar — ideal
-  para deixar rodando durante a gravação e só narrar por cima.
+### Opção A — Terminal (`pilot-script.sh`)
+
+O script [`docs/pilot-script.sh`](pilot-script.sh) roda a sequência completa (login → cliente →
+veículo → serviço → peça → OS → aprovação pelo cliente → finalização → entrega → conferência) de
+ponta a ponta com um único comando. Imprime cada chamada, o corpo da resposta e o status HTTP, e
+para imediatamente com a resposta do erro se algo quebrar — ideal para deixar rodando durante a
+gravação e só narrar por cima.
 
 ```bash
 bash docs/pilot-script.sh
 ```
 
-Para apontar para outro ambiente (ex.: o ambiente do piloto em vez de localhost):
+**Para apontar para outro ambiente** (ex.: o ambiente do piloto em vez de `localhost`), passe as
+variáveis de ambiente na frente do comando — não precisa editar o arquivo:
 
 ```bash
-BASE_URL="https://<host-do-piloto>" bash docs/pilot-script.sh
+BASE_URL="https://<host-do-piloto>" CUSTOMER_EMAIL="voce@exemplo.com" bash docs/pilot-script.sh
 ```
 
-Variáveis de ambiente aceitas, todas opcionais:
+Variáveis de ambiente aceitas, todas opcionais (têm default para rodar em `localhost`):
 
-| Variável             | Default                  | Uso                                                                 |
-|----------------------|---------------------------|-----------------------------------------------------------------------|
-| `BASE_URL`            | `http://localhost:3000`   | Endereço da API                                                       |
-| `SEED_ADMIN_EMAIL`    | `admin@oficina.com`       | Email do admin usado no login                                         |
-| `SEED_ADMIN_PASSWORD` | `Admin@123`               | Senha do admin usado no login                                         |
-| `CUSTOMER_EMAIL`      | `lucas.bria@gmail.com`    | Caixa real que recebe a notificação a cada transição de status da OS |
+| Variável             | Default                  | Precisa mudar pra outro ambiente?                                     |
+|----------------------|---------------------------|-------------------------------------------------------------------------|
+| `BASE_URL`            | `http://localhost:3000`   | **Sim, sempre** — é o endereço da API do ambiente do piloto             |
+| `SEED_ADMIN_EMAIL`    | `admin@oficina.com`       | Só se o ambiente tiver sido semeado com outro email de admin            |
+| `SEED_ADMIN_PASSWORD` | `Admin@123`               | Só se o ambiente tiver sido semeado com outra senha de admin            |
+| `CUSTOMER_EMAIL`      | `lucas.bria@gmail.com`    | Troque para a caixa de quem vai validar o recebimento do email na gravação |
 
 O script é tolerante a reexecuções: se cliente/veículo já existirem de uma tentativa anterior, ele
 avisa e segue em frente (a criação da OS busca ou cria cliente/veículo automaticamente). O serviço
@@ -67,8 +66,33 @@ de catálogo e a peça recebem um sufixo com timestamp da execução (`name`/`sk
 `UNIQUE`), então também podem ser recriados a cada execução sem conflito. Recomendado rodar uma vez
 em ensaio antes da gravação para confirmar que o ambiente está saudável.
 
-As seções abaixo mostram cada chamada individualmente — mesmo conteúdo do script, para quem
-preferir executar (ou narrar) passo a passo manualmente.
+### Opção B — Postman (`pilot-collection.postman_collection.json`)
+
+Mesma sequência de 10 requisições, em formato de collection, para quem preferir uma interface
+visual em vez de terminal na hora de gravar.
+
+1. Abra o Postman → **Import** → selecione [`docs/pilot-collection.postman_collection.json`](pilot-collection.postman_collection.json).
+2. Clique na collection importada ("Oficina MVP — Roteiro do Piloto") → aba **Variables** → ajuste
+   o que precisar (tabela abaixo) → **Save**.
+3. Clique nos `...` da collection → **Run collection** → **Run Oficina MVP...**. Ele executa as 10
+   requisições em ordem, encadeando token/ids automaticamente entre elas via scripts de teste, com
+   asserts visuais (✔/✘) de status HTTP e de status da OS em cada etapa — boa tela para deixar
+   aberta durante a gravação.
+
+**Para apontar para outro ambiente**, edite o `CURRENT VALUE` das variáveis na aba *Variables* da
+collection (não precisa editar o JSON):
+
+| Variável           | Default                  | Precisa mudar pra outro ambiente?                                        |
+|---------------------|----------------------------|------------------------------------------------------------------------------|
+| `baseUrl`            | `http://localhost:3000`    | **Sim, sempre** — é o endereço da API do ambiente do piloto                  |
+| `adminEmail`         | `admin@oficina.com`        | Só se o ambiente tiver sido semeado com outro email de admin                 |
+| `adminPassword`      | `Admin@123`                | Só se o ambiente tiver sido semeado com outra senha de admin                 |
+| `customerEmail`      | `lucas.bria@gmail.com`     | Troque para a caixa de quem vai validar o recebimento do email na gravação   |
+| `customerName`, `customerDocument`, `customerPhone`, `vehiclePlate` | valores fixos de demo | Não precisa mexer — são só os dados do cliente/veículo fictícios do roteiro |
+| `runSuffix`, `token`, `customerId`, `vehicleId`, `serviceItemId`, `partId`, `osId`, `osCode` | vazios | Não mexer — preenchidos automaticamente pelos scripts de teste durante o run |
+
+As seções abaixo mostram cada chamada individualmente — mesmo conteúdo do script e da collection,
+para quem preferir executar (ou narrar) passo a passo manualmente.
 
 ---
 
