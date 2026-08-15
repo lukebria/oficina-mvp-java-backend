@@ -1,0 +1,384 @@
+{
+  "info": {
+    "_postman_id": "b6f2a6b0-6e6a-4e1a-9b3d-0f7c8a2b5e10",
+    "name": "Oficina MVP — Roteiro do Piloto",
+    "description": "Fluxo funcional completo: login, cadastro de cliente, cadastro de veículo, cadastro do serviço de catálogo e da peça usados na OS, criação da ordem de serviço, aprovação pelo cliente e passagem por todos os status até a entrega. Use 'Run collection' para executar tudo em sequência com um clique. Ajuste as variáveis da collection (aba Variables) antes de rodar, principalmente customerEmail — é para ela que a API envia a notificação a cada transição de status.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Login (admin)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!pm.collectionVariables.get('runSuffix')) {",
+              "  pm.collectionVariables.set('runSuffix', Date.now().toString());",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "var json = pm.response.json();",
+              "pm.test('Token presente', function () { pm.expect(json.token).to.be.a('string').and.not.empty; });",
+              "pm.collectionVariables.set('token', json.token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "login"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. Cadastro do cliente",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "if (pm.response.code < 300) {",
+              "  var json = pm.response.json();",
+              "  pm.collectionVariables.set('customerId', json.id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{customerName}}\",\n  \"document\": \"{{customerDocument}}\",\n  \"email\": \"{{customerEmail}}\",\n  \"phone\": \"{{customerPhone}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/customers",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "customers"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. Cadastro do veículo",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "if (pm.response.code < 300) {",
+              "  var json = pm.response.json();",
+              "  pm.collectionVariables.set('vehicleId', json.id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": {{customerId}},\n  \"plate\": \"{{vehiclePlate}}\",\n  \"brand\": \"Toyota\",\n  \"model\": \"Corolla\",\n  \"manufacturingYear\": 2022\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/vehicles",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "vehicles"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "4. Cadastro do serviço de catálogo",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "if (pm.response.code < 300) {",
+              "  var json = pm.response.json();",
+              "  pm.collectionVariables.set('serviceItemId', json.id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Troca de óleo (piloto {{runSuffix}})\",\n  \"description\": \"Troca de óleo do motor\",\n  \"basePrice\": 180.00,\n  \"estimatedMinutes\": 60,\n  \"active\": true\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/services",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "services"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "5. Cadastro da peça",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "if (pm.response.code < 300) {",
+              "  var json = pm.response.json();",
+              "  pm.collectionVariables.set('partId', json.id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Filtro de óleo (piloto {{runSuffix}})\",\n  \"sku\": \"FILTRO-OLEO-{{runSuffix}}\",\n  \"unitPrice\": 45.90,\n  \"stockQuantity\": 25,\n  \"minStock\": 5,\n  \"active\": true\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/parts",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "parts"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "6. Criação da ordem de serviço",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "var json = pm.response.json();",
+              "pm.test('Status inicial AGUARDANDO_APROVACAO', function () { pm.expect(json.status).to.eql('AGUARDANDO_APROVACAO'); });",
+              "pm.collectionVariables.set('osId', json.id);",
+              "pm.collectionVariables.set('osCode', json.code);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerDocument\": \"{{customerDocument}}\",\n  \"customer\": {\n    \"name\": \"{{customerName}}\",\n    \"email\": \"{{customerEmail}}\",\n    \"phone\": \"{{customerPhone}}\"\n  },\n  \"vehicle\": {\n    \"plate\": \"{{vehiclePlate}}\",\n    \"brand\": \"Toyota\",\n    \"model\": \"Corolla\",\n    \"manufacturingYear\": 2022\n  },\n  \"customerNotes\": \"Barulho ao frear\",\n  \"services\": [\n    { \"serviceItemId\": {{serviceItemId}}, \"quantity\": 1 }\n  ],\n  \"parts\": [\n    { \"partId\": {{partId}}, \"quantity\": 1 }\n  ]\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/service-orders",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "service-orders"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "7. Aprovação da OS pelo cliente",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "var json = pm.response.json();",
+              "pm.test('Status EM_EXECUCAO', function () { pm.expect(json.status).to.eql('EM_EXECUCAO'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"document\": \"{{customerDocument}}\",\n  \"approved\": true,\n  \"comment\": \"Aprovado pelo cliente.\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/public/service-orders/{{osCode}}/approval",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "public", "service-orders", "{{osCode}}", "approval"]
+        },
+        "description": "Chamada pública (sem token) — é a aprovação feita pelo próprio cliente. Dispara o email de EM_EXECUCAO para customerEmail."
+      },
+      "response": []
+    },
+    {
+      "name": "8. Finalização do serviço",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "var json = pm.response.json();",
+              "pm.test('Status FINALIZADA', function () { pm.expect(json.status).to.eql('FINALIZADA'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"FINALIZADA\",\n  \"comment\": \"Serviço finalizado.\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/service-orders/{{osId}}/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "service-orders", "{{osId}}", "status"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "9. Entrega do veículo ao cliente",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "var json = pm.response.json();",
+              "pm.test('Status ENTREGUE', function () { pm.expect(json.status).to.eql('ENTREGUE'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"ENTREGUE\",\n  \"comment\": \"Veículo entregue ao cliente.\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/service-orders/{{osId}}/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "service-orders", "{{osId}}", "status"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "10. Conferência final da OS",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "var json = pm.response.json();",
+              "pm.test('Status final ENTREGUE', function () { pm.expect(json.status).to.eql('ENTREGUE'); });",
+              "pm.test('Timestamps preenchidos', function () {",
+              "  pm.expect(json.approvedAt).to.not.be.null;",
+              "  pm.expect(json.startedAt).to.not.be.null;",
+              "  pm.expect(json.finalizedAt).to.not.be.null;",
+              "  pm.expect(json.deliveredAt).to.not.be.null;",
+              "});",
+              "console.log('Roteiro concluído: OS ' + pm.collectionVariables.get('osCode') + ' finalizada e entregue.');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/service-orders/{{osId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "service-orders", "{{osId}}"]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000", "type": "string" },
+    { "key": "adminEmail", "value": "admin@oficina.com", "type": "string" },
+    { "key": "adminPassword", "value": "Admin@123", "type": "string" },
+    { "key": "customerName", "value": "Maria Cliente", "type": "string" },
+    { "key": "customerDocument", "value": "52998224725", "type": "string" },
+    { "key": "customerEmail", "value": "lucas.bria@gmail.com", "type": "string" },
+    { "key": "customerPhone", "value": "11999999999", "type": "string" },
+    { "key": "vehiclePlate", "value": "ABC1D23", "type": "string" },
+    { "key": "runSuffix", "value": "", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "customerId", "value": "", "type": "string" },
+    { "key": "vehicleId", "value": "", "type": "string" },
+    { "key": "serviceItemId", "value": "", "type": "string" },
+    { "key": "partId", "value": "", "type": "string" },
+    { "key": "osId", "value": "", "type": "string" },
+    { "key": "osCode", "value": "", "type": "string" }
+  ]
+}
