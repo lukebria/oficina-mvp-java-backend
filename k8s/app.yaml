@@ -100,6 +100,16 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: MAIL_FROM
+            - name: MAIL_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: MAIL_HOST
+            - name: MAIL_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: MAIL_PORT
 ---
 # yaml-language-server: $schema=https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.28.0/service-v1.json
 apiVersion: v1
