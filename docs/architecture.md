@@ -719,3 +719,108 @@ Estes pontos refletem o estado atual do código e podem ser úteis para manuten�
    lança `BusinessException` (`409 Conflict`). O retry acontece **antes** do `save()`, não depois de uma falha real
    de constraint — no Postgres, um erro de statement aborta a transação inteira até um rollback, então capturar
    `DataIntegrityViolationException` e tentar salvar de novo na mesma transação não funcionaria.
+
+## 13. Diagramas (Mermaid)
+
+Diagramas prontos para renderizar no GitHub, Notion ou draw.io (plugin Mermaid). Use o **13.2** como base
+principal ao redesenhar a arquitetura em ferramenta visual: um box por módulo, com quatro faixas internas
+(`web` / `application` / `domain` / `persistence`). O box mais denso é `serviceorder`; `report` fica só com
+`web` + `application`.
+
+### 13.1 Contexto / runtime
+
+Quem fala com a API e o que fica fora do processo.
+
+```mermaid
+flowchart LR
+  Staff[Equipe da oficina<br/>JWT] --> API[Oficina MVP API<br/>Spring Boot :3000]
+  Cliente[Cliente<br/>fluxo público] --> API
+  API --> PG[(PostgreSQL)]
+  API --> SMTP[SMTP / e-mail]
+  API -.-> SW[Swagger / Actuator]
+```
+
+### 13.2 Componentes / bounded contexts
+
+Dependências entre módulos (sempre via portas, nunca via adapters concretos).
+
+```mermaid
+flowchart TB
+  subgraph Shared["shared"]
+    SEC[JWT + SecurityConfig]
+    EXC[GlobalExceptionHandler]
+    VAL[Validadores CPF/CNPJ/placa]
+    DOM_S[Role, ServiceOrderStatus, BaseDomain]
+  end
+
+  AUTH[auth<br/>User / login]
+  CUST[customer<br/>Customer]
+  VEH[vehicle<br/>Vehicle]
+  CAT[catalog<br/>ServiceCatalogItem]
+  PART[part<br/>Part / estoque]
+  SO[serviceorder<br/>OS + itens + status + policy]
+  REP[report<br/>tempo médio]
+
+  VEH -->|CustomerUseCase| CUST
+  SO -->|RepositoryPorts| CUST
+  SO -->|RepositoryPorts| VEH
+  SO -->|RepositoryPorts| CAT
+  SO -->|RepositoryPorts| PART
+  SO -->|NotificationPort| SMTP[SMTP]
+  REP -->|ServiceOrderRepositoryPort| SO
+
+  AUTH --> SEC
+  CUST --> SEC
+  VEH --> SEC
+  CAT --> SEC
+  PART --> SEC
+  SO --> SEC
+  REP --> SEC
+
+  AUTH & CUST & VEH & CAT & PART & SO --> PG[(PostgreSQL)]
+```
+
+### 13.3 Camadas hexagonais + fluxo de request
+
+```mermaid
+flowchart TB
+  HTTP([HTTP JSON]) --> JWT[JwtAuthenticationFilter]
+  JWT --> CTRL[adapter/in/web<br/>Controller + DTOs]
+  CTRL -->|port/in UseCase| APP[application<br/>*Service]
+  APP --> DOM[domain<br/>POJOs + regras]
+  APP -->|port/out| PERSIST[adapter/out/persistence<br/>JpaEntity + Mapper + Adapter]
+  APP -->|port/out| MAIL[adapter/out/notification<br/>SMTP]
+  PERSIST --> DB[(PostgreSQL)]
+  APP --> CTRL
+  CTRL --> HTTP
+```
+
+### 13.4 Sequência — exemplo do módulo `customer`
+
+```mermaid
+sequenceDiagram
+  participant C as CustomerController
+  participant U as CustomerUseCase
+  participant S as CustomerService
+  participant P as CustomerRepositoryPort
+  participant A as CustomerPersistenceAdapter
+  participant DB as PostgreSQL
+
+  C->>U: Command (DTO → Command)
+  U->>S: implementa
+  S->>S: regras / validação
+  S->>P: save / find...
+  P->>A: PersistenceAdapter
+  A->>DB: JpaRepository
+  DB-->>A: XJpaEntity
+  A-->>S: Domain (via Mapper)
+  S-->>C: Result / Domain
+  C-->>C: ResponseDto
+```
+
+| Diagrama | Uso sugerido                                      |
+|----------|---------------------------------------------------|
+| 13.1     | Slide / README / visão de produto                 |
+| 13.2     | Desenho principal de componentes (boxes + setas)  |
+| 13.3     | Explicar hexagonal e onboarding de dev            |
+| 13.4     | Detalhar o caminho de uma request em um módulo    |

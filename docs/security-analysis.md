@@ -75,3 +75,78 @@ docs/
     relatorio-vulnerabilidades-oficina-mvp.pdf
     relatorio-vulnerabilidades-oficina-mvp.html
 ```
+
+
+# Análise com SonarQube Local (Docker)
+
+Como complemento à análise do SpotBugs, o **SonarQube** foi utilizado localmente via Docker para fornecer um dashboard visual com métricas de qualidade, cobertura de testes, duplicação de código, code smells e technical debt.
+
+### Pré-requisitos
+
+- **Docker Desktop** instalado e em execução no Windows.
+- **Java 21** configurado (`JAVA_HOME` e `PATH`).
+- Projeto compilável via Maven (`./mvnw clean compile`).
+
+### Passo 1 — Subir o container do SonarQube
+
+Com o Docker Desktop em execução (ícone verde na bandeja do sistema), abrir o terminal e rodar:
+
+```bash
+docker run -d --name sonarqube -p 9000:9000 sonarqube:latest
+```
+
+Aguardar até que o container esteja saudável. Verificar o status com:
+
+```bash
+docker ps
+```
+
+O SonarQube pode levar de 1 a 2 minutos para iniciar completamente na primeira execução.
+
+### Passo 2 — Acessar a interface web
+
+Abrir no navegador:
+
+```text
+http://localhost:9000
+```
+
+Credenciais padrão na primeira execução:
+
+```text
+Usuário: admin
+Senha: admin
+```
+
+No primeiro acesso, o sistema solicita a troca da senha. Definir uma nova senha e anotá-la.
+
+### Passo 3 — Criar o projeto no SonarQube
+
+1. Na interface web, clicar em **Projects → Create Project**.
+2. Preencher os campos:
+    - **Display name:** oficina-mvp-backend
+    - **Project key:** oficina-mvp-backend
+3. Clicar em **Create**.
+
+### Passo 4 — Gerar um token de acesso
+
+1. Clicar no avatar (canto superior direito) → **My Account → Security**.
+2. Em **Generate Token**, definir um nome (ex: `local-analysis`) e clicar em **Generate**.
+3. Copiar o token exibido — ele será utilizado no comando de análise.
+
+> ⚠️ O token é exibido apenas uma vez. Copiá-lo antes de fechar a janela.
+
+### Passo 5 — Executar a análise
+
+No terminal, dentro da pasta do projeto, rodar:
+
+```bash
+./mvnw verify sonar:sonar \
+  -Dsonar.projectKey=oficina-mvp-backend \
+  -Dsonar.host.url=http://localhost:9000 \
+  -Dsonar.login=TOKEN_GERADO_NO_PASSO_4
+```
+
+Substituir `TOKEN_GERADO_NO_PASSO_4` pelo token copiado anteriormente.
+
+
