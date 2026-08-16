@@ -342,6 +342,15 @@ As variáveis estão documentadas no `.env.example` e são lidas pelo `applicati
 | `MAIL_PASSWORD`          | *(vazio)*                                                      | Senha de app do Gmail       |
 | `MAIL_FROM`              | `MAIL_USERNAME` ou `no-reply@oficina.com`                      | Remetente dos e-mails de notificação de status |
 
+>
+> ```yaml
+> mail:
+>   host: ${MAIL_HOST:smtp.gmail.com}
+>   port: ${MAIL_PORT:587}
+>   from: ${MAIL_FROM:${MAIL_USERNAME:no-reply@oficina.com}}
+> ```
+
+
 ## Usuário admin inicial
 
 Ao iniciar fora do profile `test`, o sistema cria automaticamente um usuário admin se ele ainda não existir:
