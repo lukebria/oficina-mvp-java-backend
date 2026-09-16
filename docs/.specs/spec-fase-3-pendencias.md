@@ -8,8 +8,10 @@ Baseado em `13SOAT - Fase 3 - Tech Challenge.pdf` e na análise dos três reposi
 Este documento **não decide** os pontos que o enunciado deixa em aberto — cada um deles está marcado como
 **decisão em aberto** e listado de novo, consolidado, na última seção. Já decididas pelo grupo: **nuvem = AWS**
 (Academy Learner Lab), **API Gateway = Kong**, e **banco = PostgreSQL via Amazon RDS** (provável — falta só
-confirmar na prática que o custo cabe no crédito do lab). Seguem em aberto: ferramenta de observabilidade,
-estratégia de homologação/produção, backend do state do Terraform e autoscaling de nós.
+confirmar na prática que o custo cabe no crédito do lab). Os três repositórios já são públicos e com nomes de
+branch alinhados (`master`), então a proteção de branch já pode ser configurada em todos — só falta fazer isso
+(ver 2.6). Seguem em aberto: ferramenta de observabilidade, estratégia de homologação/produção, backend do
+state do Terraform, e autoscaling de nós.
 
 ## Repositórios exigidos vs. existentes
 
@@ -44,11 +46,9 @@ estratégia de homologação/produção, backend do state do Terraform e autosca
 - [x] Código da function + Terraform de deploy (Lambda, IAM, log group, HTTP API) — feito.
 - [ ] **Pipeline de CI/CD** — não existe nenhum workflow neste repositório; hoje o deploy é `terraform apply`
   manual, executado localmente.
-- [ ] **Branch padrão do repositório está como `homolog`**, não `master`/`main` — efeito colateral de termos
-  empurrado a branch `homolog` antes da `master` num repositório recém-criado. Corrigir em
-  Settings → Branches → Default branch antes de configurar qualquer regra de proteção.
-- [ ] Branch principal protegida contra commit direto + PR obrigatório para merge — não configurado
-  (API do GitHub confirma "Branch not protected" na branch padrão atual).
+- [x] **Branch padrão corrigida para `master`** (estava como `homolog` por efeito colateral de termos
+  empurrado essa branch antes da `master` num repositório recém-criado).
+- [x] Branch `master` protegida contra commit direto + PR obrigatório para merge (ver 2.6).
 - [ ] Deploy automático diferenciando branch de homologação e branch de produção — hoje não existe pipeline
   nenhuma, então também não existe essa distinção.
 - [ ] **Usuário `soat-architecture` não está entre os colaboradores deste repositório** — adicionar (confirmado
@@ -61,13 +61,22 @@ estratégia de homologação/produção, backend do state do Terraform e autosca
 
 - [x] Terraform provisiona EKS + ECR — feito (rodando em conta de AWS Academy Learner Lab, com a `LabRole`).
 - [x] Pipeline de CI/CD existe: `create_iac.yml` (fmt/validate → plan → apply) e `destroy_iac.yml` (manual).
-- [ ] **Gatilhos de `pull_request`/`push` apontam para uma branch `main-disabled`**, não `main` — hoje o
-  workflow só roda via disparo manual (`workflow_dispatch`). Se a intenção é ter deploy automático (exigido
-  pelo enunciado), trocar `main-disabled` pela branch real usada como produção.
-- [ ] Branch `main` protegida + PR obrigatório — não foi possível verificar via API (repositório privado exige
-  plano GitHub Pro para essa checagem); confirmar manualmente nas configurações do repositório.
-- [ ] Deploy automático diferenciando homologação/produção — existe uma branch `homolog` (criada nesta sessão),
-  mas nenhum workflow dispara automaticamente nela hoje.
+- [x] **Repositório tornado público** e branch padrão renomeada de `main` para `master` (alinhado com os outros
+  dois repositórios) — isso também desbloqueou a checagem/configuração de branch protection via API, que antes
+  era recusada pedindo GitHub Pro (repositório era privado).
+- [x] Sobra da branch `main` antiga verificada e removida do remoto.
+- [x] PR da branch `homolog` (reescrita do README) mergeado em `master` —
+  [#1](https://github.com/lukebria/oficina-mvp-infra-iac/pull/1).
+- [ ] **Gatilhos de `pull_request`/`push` apontam para uma branch `main-disabled`**, que não existe mais (a
+  branch real agora é `master`) — hoje o workflow só roda via disparo manual (`workflow_dispatch`). Se a
+  intenção é ter deploy automático (exigido pelo enunciado), trocar `main-disabled` por `master` nos gatilhos.
+- [x] **Bug encontrado e corrigido**: o job `apply` checava `github.ref == 'refs/heads/main'` — como a branch
+  foi renomeada pra `master`, isso fazia até um disparo manual (`workflow_dispatch`) na `master` pular o apply
+  silenciosamente. Corrigido e mergeado em `master` —
+  [#2](https://github.com/lukebria/oficina-mvp-infra-iac/pull/2).
+- [x] Branch `master` protegida + PR obrigatório (ver 2.6).
+- [ ] Deploy automático diferenciando homologação/produção — existe a branch `homolog`, mas nenhum workflow
+  dispara automaticamente nela hoje.
 - [ ] Lock de state via DynamoDB — não configurado no backend S3 (`backends.tf`); duas execuções simultâneas
   podem corromper o state.
 - [x] `soat-architecture` já está como colaborador.
@@ -100,8 +109,7 @@ estratégia de homologação/produção, backend do state do Terraform e autosca
   `feature/tech_chalange_fase_3` (só o `README.md` e o `docs/.specs/spec-init-fase-3.md` foram commitados até
   agora). Precisa revisar, commitar o restante e abrir PR para `master`.
 - [ ] `k8s/banco.yaml` precisa ser removido quando o Repo 3 existir (ver 2.3).
-- [ ] Branch `master` protegida + PR obrigatório para merge — não configurado (API confirma "Branch not
-  protected").
+- [x] Branch `master` protegida + PR obrigatório para merge (ver 2.6).
 - [ ] Deploy automático diferenciando homologação/produção — existe uma branch remota `homolog`, mas
   `app-deploy.yml` só dispara em push/PR para `main`/`master`; não há distinção de ambiente hoje.
 - [x] `soat-architecture` já está como colaborador.
@@ -155,6 +163,27 @@ hoje só existem no `terraform.tfvars` local de quem já aplicou manualmente.
 poucas horas — mesmo depois de configuradas pela primeira vez, alguém do grupo vai precisar **atualizar esses
 secrets manualmente em cada um dos três repositórios** toda vez que a sessão do lab for renovada. Não é uma
 configuração única; é uma tarefa recorrente enquanto o projeto usar esse tipo de conta.
+
+### 2.6 Proteção das branches principais (main/master) — exigência explícita do enunciado
+
+O enunciado exige, na seção "Regras de proteção": branch `main`/`master` protegida (sem commit direto) e PR
+obrigatório para merge. Status real hoje, conferido via API do GitHub:
+
+| Repositório              | Branch principal                          | Visibilidade | Protegida hoje? |
+|---------------------------|--------------------------------------------|--------------|------------------|
+| `oficina-mvp-java`        | `master`                                   | pública      | ✅ sim |
+| `oficina-auth-function`   | `master`                                   | pública      | ✅ sim |
+| `oficina-mvp-infra-iac`   | `master`                                   | pública      | ✅ sim |
+
+Configurado nos três (via API do GitHub, confirmado por leitura de volta): PR obrigatório antes de merge
+(`required_pull_request_reviews`, sem exigir aprovação — `required_approving_review_count: 0`, já que o
+enunciado só pede PR obrigatório, não aprovação), force-push bloqueado (`allow_force_pushes: false`), exclusão
+da branch bloqueada (`allow_deletions: false`), e `enforce_admins: true` (a proteção vale até pra quem tem
+acesso de admin no repositório, pra realmente não ter "commit direto" possível por ninguém).
+
+- [x] `oficina-mvp-java` (`master`)
+- [x] `oficina-auth-function` (`master`)
+- [x] `oficina-mvp-infra-iac` (`master`)
 
 ---
 
@@ -327,3 +356,8 @@ Serverless v2 tem um consumo mínimo cobrado por hora enquanto a instância exis
 - **Adicionar Karpenter** — mesma dinâmica de custo do Cluster Autoscaler (também sobe nós novos sob demanda),
   com a complexidade de configuração ainda maior — provavelmente o que menos se encaixa numa entrega com
   restrição de "só free/crédito de estudante".
+
+### 7. Visibilidade do `oficina-mvp-infra-iac` — ✅ resolvido
+
+Repositório tornado público e branch padrão renomeada para `master`. Branch protection já pode ser configurada
+nos três repositórios sem custo nenhum (ver seção 2.6).
