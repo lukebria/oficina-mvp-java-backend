@@ -48,8 +48,7 @@ state do Terraform, e autoscaling de nós.
   manual, executado localmente.
 - [x] **Branch padrão corrigida para `master`** (estava como `homolog` por efeito colateral de termos
   empurrado essa branch antes da `master` num repositório recém-criado).
-- [ ] Branch `master` protegida contra commit direto + PR obrigatório para merge — ainda não configurado
-  (API do GitHub confirma "Branch not protected").
+- [x] Branch `master` protegida contra commit direto + PR obrigatório para merge (ver 2.6).
 - [ ] Deploy automático diferenciando branch de homologação e branch de produção — hoje não existe pipeline
   nenhuma, então também não existe essa distinção.
 - [ ] **Usuário `soat-architecture` não está entre os colaboradores deste repositório** — adicionar (confirmado
@@ -66,13 +65,12 @@ state do Terraform, e autoscaling de nós.
   dois repositórios) — isso também desbloqueou a checagem/configuração de branch protection via API, que antes
   era recusada pedindo GitHub Pro (repositório era privado).
 - [x] Sobra da branch `main` antiga verificada e removida do remoto.
-- [x] PR da branch `homolog` (reescrita do README) aberto para `master` —
+- [x] PR da branch `homolog` (reescrita do README) mergeado em `master` —
   [#1](https://github.com/lukebria/oficina-mvp-infra-iac/pull/1).
 - [ ] **Gatilhos de `pull_request`/`push` apontam para uma branch `main-disabled`**, que não existe mais (a
   branch real agora é `master`) — hoje o workflow só roda via disparo manual (`workflow_dispatch`). Se a
   intenção é ter deploy automático (exigido pelo enunciado), trocar `main-disabled` por `master` nos gatilhos.
-- [ ] Branch `master` protegida + PR obrigatório — ainda não configurado (agora **verificável e configurável**,
-  já que o repositório é público).
+- [x] Branch `master` protegida + PR obrigatório (ver 2.6).
 - [ ] Deploy automático diferenciando homologação/produção — existe a branch `homolog`, mas nenhum workflow
   dispara automaticamente nela hoje.
 - [ ] Lock de state via DynamoDB — não configurado no backend S3 (`backends.tf`); duas execuções simultâneas
@@ -107,8 +105,7 @@ state do Terraform, e autoscaling de nós.
   `feature/tech_chalange_fase_3` (só o `README.md` e o `docs/.specs/spec-init-fase-3.md` foram commitados até
   agora). Precisa revisar, commitar o restante e abrir PR para `master`.
 - [ ] `k8s/banco.yaml` precisa ser removido quando o Repo 3 existir (ver 2.3).
-- [ ] Branch `master` protegida + PR obrigatório para merge — não configurado (API confirma "Branch not
-  protected").
+- [x] Branch `master` protegida + PR obrigatório para merge (ver 2.6).
 - [ ] Deploy automático diferenciando homologação/produção — existe uma branch remota `homolog`, mas
   `app-deploy.yml` só dispara em push/PR para `main`/`master`; não há distinção de ambiente hoje.
 - [x] `soat-architecture` já está como colaborador.
@@ -170,19 +167,19 @@ obrigatório para merge. Status real hoje, conferido via API do GitHub:
 
 | Repositório              | Branch principal                          | Visibilidade | Protegida hoje? |
 |---------------------------|--------------------------------------------|--------------|------------------|
-| `oficina-mvp-java`        | `master`                                   | pública      | ❌ não ("Branch not protected") |
-| `oficina-auth-function`   | `master` (default já corrigido — ver 2.1)  | pública      | ❌ não |
-| `oficina-mvp-infra-iac`   | `master` (renomeada de `main`, repo agora público — ver 2.2) | pública | ❌ não ("Branch not protected" — já verificável) |
+| `oficina-mvp-java`        | `master`                                   | pública      | ✅ sim |
+| `oficina-auth-function`   | `master`                                   | pública      | ✅ sim |
+| `oficina-mvp-infra-iac`   | `master`                                   | pública      | ✅ sim |
 
-Configuração mínima que cada branch principal precisa ter, para atender o enunciado:
-- Exigir Pull Request antes de merge (sem push direto na branch).
-- Bloquear force-push e exclusão da branch.
-- (Não exigido explicitamente pelo enunciado, mas recomendável) exigir pelo menos 1 aprovação antes do merge.
+Configurado nos três (via API do GitHub, confirmado por leitura de volta): PR obrigatório antes de merge
+(`required_pull_request_reviews`, sem exigir aprovação — `required_approving_review_count: 0`, já que o
+enunciado só pede PR obrigatório, não aprovação), force-push bloqueado (`allow_force_pushes: false`), exclusão
+da branch bloqueada (`allow_deletions: false`), e `enforce_admins: true` (a proteção vale até pra quem tem
+acesso de admin no repositório, pra realmente não ter "commit direto" possível por ninguém).
 
-Ações — **os três repositórios já podem ser configurados agora**, todos públicos:
-- [ ] `oficina-mvp-java` (`master`)
-- [ ] `oficina-auth-function` (`master`)
-- [ ] `oficina-mvp-infra-iac` (`master`)
+- [x] `oficina-mvp-java` (`master`)
+- [x] `oficina-auth-function` (`master`)
+- [x] `oficina-mvp-infra-iac` (`master`)
 
 ---
 
