@@ -20,8 +20,11 @@ app:
   jwt:
     secret: teste-teste-teste-teste-teste-teste-teste-teste
     expires-in-minutes: 60
+    customer-secret: teste-cliente-teste-cliente-teste-cliente-teste
   cors:
     allowed-origins: http://localhost:5173
   seed:
     admin-email: admin@oficina.com
     admin-password: Admin@123
+  internal:
+    api-key: teste-internal-api-key

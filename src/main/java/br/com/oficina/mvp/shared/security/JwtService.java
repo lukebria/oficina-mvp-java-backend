@@ -16,10 +16,12 @@ import java.util.Date;
 public class JwtService {
     private final JwtProperties properties;
     private final SecretKey key;
+    private final SecretKey customerKey;
 
     public JwtService(JwtProperties properties) {
         this.properties = properties;
         this.key = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
+        this.customerKey = Keys.hmacShaKeyFor(properties.customerSecret().getBytes(StandardCharsets.UTF_8));
     }
 
     public String generate(User user) {
@@ -37,6 +39,18 @@ public class JwtService {
     public Claims parse(String token) {
         return Jwts.parser()
                 .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+    }
+
+    /**
+     * Valida tokens do fluxo público de cliente (CPF), emitidos pela Function Serverless externa com
+     * {@code CUSTOMER_JWT_SECRET} — chave própria, separada da usada para os tokens administrativos.
+     */
+    public Claims parseCustomer(String token) {
+        return Jwts.parser()
+                .verifyWith(customerKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();

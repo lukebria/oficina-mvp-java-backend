@@ -128,11 +128,12 @@ em todos e está detalhada uma única vez na seção 4.9, em vez de repetida em 
 
 | Classe                                                             | Camada               | Responsabilidade                                                     |
 |----------------------------------------------------------------------|-----------------------|--------------------------------------------------------------------------|
-| `Customer`                                                            | domain                | Modelo de domínio puro (POJO), documento normalizado                    |
+| `Customer` / `CustomerStatus`                                         | domain                | Modelo de domínio puro (POJO), documento normalizado; `status` (`ACTIVE`/`INACTIVE`, default `ACTIVE`) gerenciável pelo CRUD admin e usado para bloquear autenticação via CPF (seção 5.3) |
 | `CustomerUseCase` / `CustomerCommand`                                 | application.port.in   | Porta de entrada e comando de create/update                             |
 | `CustomerRepositoryPort`                                              | application.port.out  | Porta de saída (`findByDocument`, `save`, `delete`...)                  |
 | `CustomerService`                                                     | application           | Implementa `CustomerUseCase`; valida CPF/CNPJ                           |
 | `CustomerController` / `CustomerRequestDto` / `CustomerResponseDto`   | adapter.in.web        | `/api/customers` — CRUD de clientes                                     |
+| `InternalCustomerController` / `InternalCustomerStatusResponseDto`    | adapter.in.web        | `/api/internal/customers/{document}` — consulta de existência/status consumida pela Function Serverless externa de autenticação via CPF; autenticado por `X-Internal-Api-Key`, não por JWT. Ver seção 5.4 |
 
 ### 4.2 `vehicle`
 
@@ -221,10 +222,12 @@ Pacote: `br.com.oficina.mvp.shared` — recursos transversais que não pertencem
 | `shared.persistence.BaseJpaEntity`   | Superclasse JPA (`@MappedSuperclass`) com `id`/`createdAt`/`updatedAt`, usada por toda `XJpaEntity` |
 | `shared.domain.Role`                 | Enum de papel do usuário (`ADMIN`, `ATTENDANT`, `MECHANIC`)                        |
 | `shared.domain.ServiceOrderStatus`   | Enum de status da OS, usado pelo módulo `serviceorder` e por quem consulta o status |
-| `SecurityConfig`                     | Configuração de segurança, CORS, sessão stateless, rotas públicas e filtro JWT      |
-| `JwtAuthenticationFilter`            | Lê `Authorization: Bearer`, valida token e preenche o `SecurityContext`             |
-| `JwtService`                         | Gera e faz parse do JWT                                                             |
-| `JwtProperties`                      | Propriedades `app.jwt.*`                                                            |
+| `SecurityConfig`                     | Configuração de segurança, CORS, sessão stateless, rotas públicas e filtros JWT/API key |
+| `JwtAuthenticationFilter`            | Lê `Authorization: Bearer`, tenta validar como token administrativo e depois como token de cliente (CPF), preenchendo o `SecurityContext` com a authority correspondente (`ROLE_<role>` ou `ROLE_CUSTOMER`) |
+| `InternalApiKeyAuthenticationFilter` | Lê `X-Internal-Api-Key`, autentica chamadas de serviço-a-serviço (`ROLE_INTERNAL_SERVICE`) para `/api/internal/**` |
+| `JwtService`                         | Gera/faz parse do JWT administrativo (`parse`) e faz parse do JWT de cliente emitido externamente (`parseCustomer`), com chaves distintas |
+| `JwtProperties`                      | Propriedades `app.jwt.*`: `secret`/`expires-in-minutes` (administrativo) e `customer-secret` (fluxo CPF)  |
+| `InternalApiProperties`              | Propriedade `app.internal.api-key`                                                   |
 | `AppCorsProperties`                  | Propriedade `app.cors.allowed-origins`                                              |
 | `OpenApiConfig`                      | Metadados do Swagger/OpenAPI e security scheme Bearer                               |
 | `DataSeeder`                         | Seed inicial de admin, serviços e peças fora do profile `test`                      |
@@ -274,7 +277,8 @@ precisam de `@Transactional` — não têm associação `LAZY` nem usam `EntityM
 
 ## 5. Segurança
 
-A segurança é stateless e usa JWT Bearer.
+A segurança é stateless e usa JWT Bearer — com **dois emissores/segredos diferentes** para dois públicos diferentes
+(equipe da oficina vs. cliente final), mais uma credencial de serviço-a-serviço para o endpoint interno.
 
 ### Rotas públicas
 
@@ -282,7 +286,6 @@ Configuradas em `SecurityConfig`:
 
 ```txt
 POST /api/auth/login
-/api/public/**
 /api/health
 /actuator/health
 /swagger-ui.html
@@ -290,7 +293,9 @@ POST /api/auth/login
 /v3/api-docs/**
 ```
 
-### Rotas autenticadas
+`/api/public/service-orders/**` **não é mais público** — ver seção 5.3. `/api/internal/**` também não — ver seção 5.4.
+
+### Rotas autenticadas (JWT administrativo)
 
 As demais rotas exigem header:
 
@@ -298,16 +303,58 @@ As demais rotas exigem header:
 Authorization: Bearer <token>
 ```
 
-O JWT carrega os claims:
+O JWT administrativo (emitido por `POST /api/auth/login`, via `JwtService.generate`) carrega os claims:
 
 ```txt
-subject = id do usuário
-role    = role do usuário
+subject = id do usuário (users.id)
+role    = role do usuário (ADMIN, MECHANIC, ATTENDANT)
 email   = email do usuário
 ```
 
-O filtro `JwtAuthenticationFilter` transforma a role em authority `ROLE_<ROLE>`, o que permite usar
-`hasRole`/`hasAnyRole` em `SecurityConfig`.
+assinado com `JWT_SECRET`. O filtro `JwtAuthenticationFilter` transforma a role em authority `ROLE_<ROLE>`, o que
+permite usar `hasRole`/`hasAnyRole` em `SecurityConfig`.
+
+### Autenticação via CPF (fluxo público do cliente)
+
+`GET /api/public/service-orders/{code}` e `POST /api/public/service-orders/{code}/approval` exigem
+`hasRole("CUSTOMER")`, satisfeito por um JWT **emitido fora deste backend**: uma Function Serverless em outro
+repositório, acionada por trás de um API Gateway (produto ainda em definição), que:
+
+1. valida o CPF informado pelo cliente (`DocumentValidator`, mesma regra usada aqui);
+2. consulta `GET /api/internal/customers/{document}` (seção 5.4) para confirmar que o cliente existe e está `ACTIVE`;
+3. assina um JWT HS256 com `CUSTOMER_JWT_SECRET` — segredo **dedicado**, diferente de `JWT_SECRET`, para que o
+   comprometimento de um ambiente externo (fora do nosso controle direto) não afete os tokens administrativos —
+   com claims `sub` = documento normalizado (só dígitos) e `role` = `"CUSTOMER"`.
+
+`JwtAuthenticationFilter` tenta primeiro `JwtService.parse` (chave administrativa); se a assinatura não bater
+(`SignatureException`), tenta `JwtService.parseCustomer` (chave de cliente). Quando esse segundo parse é bem
+sucedido e o `role` claim é `CUSTOMER`, o filtro ainda confere, via `CustomerRepositoryPort.findByDocument`, que o
+documento existe **e** que `Customer.status == CustomerStatus.ACTIVE` antes de autenticar — mesma postura de
+revalidação contra o banco que já existe para o token administrativo (`UserRepositoryPort.findById`). Essa
+revalidação acontece a cada request, não só no momento em que a Function externa emitiu o token: um cliente
+marcado `INACTIVE` depois de já ter um token válido em mãos perde acesso imediatamente, sem esperar o token
+expirar. O principal da autenticação passa a ser o próprio documento.
+
+`PublicServiceOrderController` lê esse documento sempre de `SecurityContextHolder` (nunca de um parâmetro de
+request) e passa para `ServiceOrderService.findByCode`/`.decideApprovalByCustomer` — cuja assinatura não mudou; só
+a origem do documento mudou. Isso fecha a falha de design do desenho anterior (documento como parâmetro solto, que
+qualquer chamador podia trocar): agora só quem tem um token válido para aquele CPF consegue consultar/aprovar a OS
+correspondente.
+
+Não é necessário estender o enum `Role` (`shared.domain`) para isso — ele representa papéis persistidos em
+`users.role` (com `CHECK` no banco); `CUSTOMER` é só uma authority Spring Security derivada do claim do token, nunca
+gravada em `users`.
+
+### Endpoint interno de consulta de cliente
+
+`GET /api/internal/customers/{document}` existe para a Function Serverless externa checar existência/status do
+cliente **antes** de emitir o JWT do fluxo CPF — não é autenticado por JWT, e sim por
+`InternalApiKeyAuthenticationFilter`, que compara o header `X-Internal-Api-Key` com `INTERNAL_API_KEY` e autentica
+com authority `ROLE_INTERNAL_SERVICE` quando bate. Resposta: `{"found": true, "customerId": ..., "name": ...,
+"status": "ACTIVE"}` (ou `"INACTIVE"`) quando o documento existe, ou `{"found": false, "status": "NOT_FOUND"}`
+(404) quando não existe. `status` reflete `Customer.status` (`CustomerStatus`, persistido, migration
+`V3__add_customer_status.sql`); `NOT_FOUND` é um valor só de resposta deste DTO — nunca gravado em
+`customers.status`.
 
 ### Autorização por perfil
 
@@ -338,6 +385,9 @@ Além da autenticação, `SecurityConfig` aplica autorização granular por rota
 | `/api/service-orders/{id}/status`                   | PATCH  | ADMIN, MECHANIC            |
 | `/api/service-orders/{id}/diagnosis`                | PATCH  | ADMIN, MECHANIC            |
 | `/api/reports/average-execution-time`               | GET    | ADMIN                      |
+| `/api/public/service-orders/{code}`                  | GET    | CUSTOMER (token via CPF)   |
+| `/api/public/service-orders/{code}/approval`         | POST   | CUSTOMER (token via CPF)   |
+| `/api/internal/customers/{document}`                 | GET    | `X-Internal-Api-Key` (não é role de JWT) |
 
 Rotas fora dessa lista exigem apenas autenticação (`anyRequest().authenticated()`). `GET /api/health` e
 `GET /actuator/health` permanecem em `permitAll()` — exigir role para um probe de liveness/monitoramento quebraria a
@@ -345,7 +395,10 @@ convenção usada por orquestradores de infraestrutura.
 
 Coberto por `AuthorizationIntegrationTest` (`src/test/java/br/com/oficina/mvp/shared/api`), que sobe o contexto
 Spring real (Security incluído, sem mocks) e verifica 403 para perfis não permitidos e sucesso para os permitidos,
-para cada formato de regra da matriz (todos os perfis, só ADMIN, ADMIN+MECHANIC e rota pública).
+para cada formato de regra da matriz (todos os perfis, só ADMIN, ADMIN+MECHANIC e rota pública), além do caso
+específico do token de cliente via CPF (sem token, token administrativo, token de outro cliente e token do dono da
+OS). O endpoint interno tem cobertura própria em
+`InternalCustomerControllerIntegrationTest` (`src/test/java/br/com/oficina/mvp/customer/adapter/in/web`).
 
 ### CORS
 
@@ -482,15 +535,20 @@ PATCH /api/service-orders/{id}/approval
        -> não notifica (RECUSADA é a única transição que não dispara notificação)
 ```
 
-### 7.4 Consulta e aprovação pública pelo cliente
+### 7.4 Consulta e aprovação pública pelo cliente (autenticado via CPF)
+
+Ambas as rotas exigem `Authorization: Bearer <token-cliente>` (ver seção 5.3) — o documento não é mais um
+parâmetro de request, vem do `SecurityContext` preenchido pelo `JwtAuthenticationFilter`.
 
 Consulta pública:
 
 ```txt
-GET /api/public/service-orders/{code}?document=<cpf-ou-cnpj>
+GET /api/public/service-orders/{code}
+Authorization: Bearer <token-cliente>
+  -> JwtAuthenticationFilter autentica como CUSTOMER (sub = documento)
   -> PublicServiceOrderController.status
-  -> ServiceOrderService.findByCode (implementa PublicServiceOrderUseCase)
-  -> normaliza document
+  -> lê documento de SecurityContextHolder.getContext().getAuthentication().getName()
+  -> ServiceOrderService.findByCode(code, documento) (implementa PublicServiceOrderUseCase)
   -> confere se o documento pertence ao cliente da OS
   -> retorna visão pública da OS
 ```
@@ -499,15 +557,20 @@ Decisão pública sobre o orçamento:
 
 ```txt
 POST /api/public/service-orders/{code}/approval
+Authorization: Bearer <token-cliente>
+  -> JwtAuthenticationFilter autentica como CUSTOMER (sub = documento)
   -> PublicServiceOrderController.decideApproval
-  -> ServiceOrderService.decideApprovalByCustomer
-  -> normaliza document
+  -> lê documento de SecurityContextHolder.getContext().getAuthentication().getName()
+  -> ServiceOrderService.decideApprovalByCustomer(code, documento, approved, comment)
   -> valida se o documento pertence ao cliente
   -> exige status AGUARDANDO_APROVACAO
   -> se approved=true: valida estoque, decrementa estoque, muda status para EM_EXECUCAO, notifica cliente
   -> se approved=false: muda status para RECUSADA (não notifica)
   -> registra histórico
 ```
+
+`ServiceOrderService.findByCode`/`.decideApprovalByCustomer` não mudaram de assinatura — continuam recebendo
+`document` como parâmetro simples; só quem os chama (o controller) mudou de onde tira esse valor.
 
 ### 7.5 Troca de status
 
@@ -719,6 +782,17 @@ Estes pontos refletem o estado atual do código e podem ser úteis para manuten�
    lança `BusinessException` (`409 Conflict`). O retry acontece **antes** do `save()`, não depois de uma falha real
    de constraint — no Postgres, um erro de statement aborta a transação inteira até um rollback, então capturar
    `DataIntegrityViolationException` e tentar salvar de novo na mesma transação não funcionaria.
+6. As rotas públicas de OS (`/api/public/service-orders/**`) trocaram "documento como parâmetro de request" por
+   "documento vindo de um JWT" (ver seção 5.3) — esse JWT é emitido por uma Function Serverless em outro
+   repositório, não por este backend. A única coisa que este repositório garante é o *contrato*: o segredo
+   dedicado (`CUSTOMER_JWT_SECRET`), as claims (`sub`/`role`) e o endpoint interno de consulta de cliente
+   (`/api/internal/customers/{document}`, seção 5.4). Qualquer mudança de claims ou de segredo precisa ser
+   coordenada com esse outro repositório.
+7. `Customer.status` (`CustomerStatus`: `ACTIVE`/`INACTIVE`, migration `V3__add_customer_status.sql`) é editável
+   pelo CRUD admin e bloqueia autenticação via CPF quando `INACTIVE` (`JwtAuthenticationFilter`, seção 5.3). Não
+   afeta o fluxo administrativo de OS (CRUD, criação, aprovação pela equipe da oficina) — o bloqueio é só na
+   autenticação do fluxo público. `NOT_FOUND` é exclusivo da resposta de `GET /api/internal/customers/{document}`
+   quando o documento não existe; nunca é um valor persistido em `customers.status`.
 
 ## 13. Diagramas (Mermaid)
 

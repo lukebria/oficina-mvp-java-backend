@@ -90,7 +90,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
     private Customer resolveCustomer(CreateServiceOrderCommand.CustomerData data, String document) {
         var customer = customers.findByDocument(document)
                 .orElseGet(() -> customers.save(new Customer(data.name(), document, data.email(), data.phone())));
-        customer.update(data.name(), document, data.email(), data.phone());
+        customer.update(data.name(), document, data.email(), data.phone(), null);
         customers.save(customer);
         return customer;
     }

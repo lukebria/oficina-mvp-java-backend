@@ -13,12 +13,13 @@ public final class CustomerMapper {
                 entity.getName(),
                 entity.getDocument(),
                 entity.getEmail(),
-                entity.getPhone()
+                entity.getPhone(),
+                entity.getStatus()
         );
     }
 
     static CustomerJpaEntity toNewEntity(Customer domain) {
-        return new CustomerJpaEntity(domain.getName(), domain.getDocument(), domain.getEmail(), domain.getPhone());
+        return new CustomerJpaEntity(domain.getName(), domain.getDocument(), domain.getEmail(), domain.getPhone(), domain.getStatus());
     }
 
     static void applyToEntity(Customer domain, CustomerJpaEntity entity) {
@@ -26,5 +27,6 @@ public final class CustomerMapper {
         entity.setDocument(domain.getDocument());
         entity.setEmail(domain.getEmail());
         entity.setPhone(domain.getPhone());
+        entity.setStatus(domain.getStatus());
     }
 }

@@ -4,6 +4,7 @@ import br.com.oficina.mvp.customer.application.port.in.CustomerCommand;
 import br.com.oficina.mvp.customer.application.port.in.CustomerUseCase;
 import br.com.oficina.mvp.customer.application.port.out.CustomerRepositoryPort;
 import br.com.oficina.mvp.customer.domain.Customer;
+import br.com.oficina.mvp.customer.domain.CustomerStatus;
 import br.com.oficina.mvp.shared.exception.BusinessException;
 import br.com.oficina.mvp.shared.validation.DocumentValidator;
 import org.springframework.http.HttpStatus;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class CustomerService implements CustomerUseCase {
@@ -33,10 +35,17 @@ public class CustomerService implements CustomerUseCase {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<Customer> findByDocument(String document) {
+        return customers.findByDocument(DocumentValidator.normalize(document));
+    }
+
+    @Override
     @Transactional
     public Customer create(CustomerCommand command) {
         var document = DocumentValidator.requireValid(command.document());
-        return customers.save(new Customer(command.name(), document, command.email(), command.phone()));
+        var status = command.status() != null ? command.status() : CustomerStatus.ACTIVE;
+        return customers.save(new Customer(command.name(), document, command.email(), command.phone(), status));
     }
 
     @Override
@@ -44,7 +53,7 @@ public class CustomerService implements CustomerUseCase {
     public Customer update(Long id, CustomerCommand command) {
         var customer = findEntity(id);
         var document = DocumentValidator.requireValid(command.document());
-        customer.update(command.name(), document, command.email(), command.phone());
+        customer.update(command.name(), document, command.email(), command.phone(), command.status());
         customers.save(customer);
         return customer;
     }

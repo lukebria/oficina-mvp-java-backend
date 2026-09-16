@@ -48,6 +48,7 @@ app:
   jwt:
     secret: ${JWT_SECRET:troque-este-segredo-em-producao-com-pelo-menos-32-caracteres}
     expires-in-minutes: ${JWT_EXPIRES_IN_MINUTES:480}
+    customer-secret: ${CUSTOMER_JWT_SECRET:troque-este-segredo-de-cliente-em-producao-com-pelo-menos-32-caracteres}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
   seed:
@@ -55,3 +56,5 @@ app:
     admin-password: ${SEED_ADMIN_PASSWORD:Admin@123}
   mail:
     from: ${MAIL_FROM:${MAIL_USERNAME:no-reply@oficina.com}}
+  internal:
+    api-key: ${INTERNAL_API_KEY:troque-esta-chave-interna-em-producao}
