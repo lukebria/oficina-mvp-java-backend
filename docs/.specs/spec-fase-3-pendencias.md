@@ -8,9 +8,10 @@ Baseado em `13SOAT - Fase 3 - Tech Challenge.pdf` e na análise dos três reposi
 Este documento **não decide** os pontos que o enunciado deixa em aberto — cada um deles está marcado como
 **decisão em aberto** e listado de novo, consolidado, na última seção. Já decididas pelo grupo: **nuvem = AWS**
 (Academy Learner Lab), **API Gateway = Kong**, e **banco = PostgreSQL via Amazon RDS** (provável — falta só
-confirmar na prática que o custo cabe no crédito do lab). Seguem em aberto: ferramenta de observabilidade,
-estratégia de homologação/produção, backend do state do Terraform, autoscaling de nós, e a visibilidade do
-`oficina-mvp-infra-iac` (hoje privado, o que bloqueia configurar a proteção de branch exigida pelo enunciado).
+confirmar na prática que o custo cabe no crédito do lab). Os três repositórios já são públicos e com nomes de
+branch alinhados (`master`), então a proteção de branch já pode ser configurada em todos — só falta fazer isso
+(ver 2.6). Seguem em aberto: ferramenta de observabilidade, estratégia de homologação/produção, backend do
+state do Terraform, e autoscaling de nós.
 
 ## Repositórios exigidos vs. existentes
 
@@ -61,13 +62,19 @@ estratégia de homologação/produção, backend do state do Terraform, autoscal
 
 - [x] Terraform provisiona EKS + ECR — feito (rodando em conta de AWS Academy Learner Lab, com a `LabRole`).
 - [x] Pipeline de CI/CD existe: `create_iac.yml` (fmt/validate → plan → apply) e `destroy_iac.yml` (manual).
-- [ ] **Gatilhos de `pull_request`/`push` apontam para uma branch `main-disabled`**, não `main` — hoje o
-  workflow só roda via disparo manual (`workflow_dispatch`). Se a intenção é ter deploy automático (exigido
-  pelo enunciado), trocar `main-disabled` pela branch real usada como produção.
-- [ ] Branch `main` protegida + PR obrigatório — não foi possível verificar via API (repositório privado exige
-  plano GitHub Pro para essa checagem); confirmar manualmente nas configurações do repositório.
-- [ ] Deploy automático diferenciando homologação/produção — existe uma branch `homolog` (criada nesta sessão),
-  mas nenhum workflow dispara automaticamente nela hoje.
+- [x] **Repositório tornado público** e branch padrão renomeada de `main` para `master` (alinhado com os outros
+  dois repositórios) — isso também desbloqueou a checagem/configuração de branch protection via API, que antes
+  era recusada pedindo GitHub Pro (repositório era privado).
+- [ ] A antiga branch `main` ainda existe no remoto, apontando pro mesmo commit que `master` (sobra do rename) —
+  pode ser excluída.
+- [ ] A branch `homolog` (criada nesta sessão, com a reescrita do README) ainda não tem PR aberto para `master`.
+- [ ] **Gatilhos de `pull_request`/`push` apontam para uma branch `main-disabled`**, que não existe mais (a
+  branch real agora é `master`) — hoje o workflow só roda via disparo manual (`workflow_dispatch`). Se a
+  intenção é ter deploy automático (exigido pelo enunciado), trocar `main-disabled` por `master` nos gatilhos.
+- [ ] Branch `master` protegida + PR obrigatório — ainda não configurado (agora **verificável e configurável**,
+  já que o repositório é público).
+- [ ] Deploy automático diferenciando homologação/produção — existe a branch `homolog`, mas nenhum workflow
+  dispara automaticamente nela hoje.
 - [ ] Lock de state via DynamoDB — não configurado no backend S3 (`backends.tf`); duas execuções simultâneas
   podem corromper o state.
 - [x] `soat-architecture` já está como colaborador.
@@ -165,20 +172,17 @@ obrigatório para merge. Status real hoje, conferido via API do GitHub:
 |---------------------------|--------------------------------------------|--------------|------------------|
 | `oficina-mvp-java`        | `master`                                   | pública      | ❌ não ("Branch not protected") |
 | `oficina-auth-function`   | `master` (default já corrigido — ver 2.1)  | pública      | ❌ não |
-| `oficina-mvp-infra-iac`   | `main`                                     | **privada**  | ⚠️ nem verificável/configurável no plano atual — a própria API do GitHub recusou o pedido pedindo "Upgrade to GitHub Pro or make this repository public" |
+| `oficina-mvp-infra-iac`   | `master` (renomeada de `main`, repo agora público — ver 2.2) | pública | ❌ não ("Branch not protected" — já verificável) |
 
 Configuração mínima que cada branch principal precisa ter, para atender o enunciado:
 - Exigir Pull Request antes de merge (sem push direto na branch).
 - Bloquear force-push e exclusão da branch.
 - (Não exigido explicitamente pelo enunciado, mas recomendável) exigir pelo menos 1 aprovação antes do merge.
 
-Ações:
-- [ ] `oficina-mvp-java` (`master`) — repositório público, dá pra configurar agora.
-- [ ] `oficina-auth-function` (`master`) — branch padrão já corrigida; repositório público, dá pra configurar
-  agora.
-- [ ] `oficina-mvp-infra-iac` (`main`) — bloqueado pela combinação repositório privado + plano gratuito do
-  GitHub. **Decisão em aberto**: tornar o repositório público, ou assinar um plano pago (Pro/Team) para
-  habilitar branch protection em repositório privado.
+Ações — **os três repositórios já podem ser configurados agora**, todos públicos:
+- [ ] `oficina-mvp-java` (`master`)
+- [ ] `oficina-auth-function` (`master`)
+- [ ] `oficina-mvp-infra-iac` (`master`)
 
 ---
 
@@ -352,11 +356,7 @@ Serverless v2 tem um consumo mínimo cobrado por hora enquanto a instância exis
   com a complexidade de configuração ainda maior — provavelmente o que menos se encaixa numa entrega com
   restrição de "só free/crédito de estudante".
 
-### 7. Visibilidade do `oficina-mvp-infra-iac` (bloqueia a proteção de branch)
+### 7. Visibilidade do `oficina-mvp-infra-iac` — ✅ resolvido
 
-- **Tornar o repositório público** — mesma visibilidade dos outros dois repositórios; libera branch protection
-  de graça, sem custo nenhum. Ponto de atenção: qualquer segredo que porventura já tenha sido commitado no
-  histórico do repositório ficaria visível (vale um `git log`/busca por segredo antes de trocar a visibilidade).
-- **Assinar GitHub Pro/Team** — mantém o repositório privado e libera branch protection mesmo assim; tem custo
-  de assinatura, o que pode não se encaixar na restrição de "só free/crédito de estudante" já colocada para a
-  parte de cloud.
+Repositório tornado público e branch padrão renomeada para `master`. Branch protection já pode ser configurada
+nos três repositórios sem custo nenhum (ver seção 2.6).
