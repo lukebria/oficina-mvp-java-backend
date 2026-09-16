@@ -3,6 +3,7 @@ package br.com.oficina.mvp.customer.application;
 import br.com.oficina.mvp.customer.application.port.in.CustomerCommand;
 import br.com.oficina.mvp.customer.application.port.out.CustomerRepositoryPort;
 import br.com.oficina.mvp.customer.domain.Customer;
+import br.com.oficina.mvp.customer.domain.CustomerStatus;
 import br.com.oficina.mvp.shared.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,18 +41,29 @@ class CustomerServiceTest {
 
     @Test
     void shouldCreateCustomer() {
-        var command = new CustomerCommand("João", "529.982.247-25", "joao@email.com", "11999999999");
+        var command = new CustomerCommand("João", "529.982.247-25", "joao@email.com", "11999999999", null);
         when(customers.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var result = service.create(command);
 
         assertThat(result.getName()).isEqualTo("João");
         assertThat(result.getDocument()).isEqualTo("52998224725");
+        assertThat(result.getStatus()).isEqualTo(CustomerStatus.ACTIVE);
+    }
+
+    @Test
+    void shouldCreateCustomerWithExplicitStatus() {
+        var command = new CustomerCommand("João", "529.982.247-25", "joao@email.com", "11999999999", CustomerStatus.INACTIVE);
+        when(customers.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.create(command);
+
+        assertThat(result.getStatus()).isEqualTo(CustomerStatus.INACTIVE);
     }
 
     @Test
     void shouldRejectInvalidDocument() {
-        var command = new CustomerCommand("João", "111.111.111-11", null, null);
+        var command = new CustomerCommand("João", "111.111.111-11", null, null, null);
 
         assertThatThrownBy(() -> service.create(command))
                 .isInstanceOfSatisfying(BusinessException.class, ex ->
@@ -80,10 +92,22 @@ class CustomerServiceTest {
         var customer = new Customer("João", "52998224725", "joao@email.com", null);
         when(customers.findById(1L)).thenReturn(Optional.of(customer));
 
-        var command = new CustomerCommand("João Atualizado", "529.982.247-25", "novo@email.com", "11888888888");
+        var command = new CustomerCommand("João Atualizado", "529.982.247-25", "novo@email.com", "11888888888", null);
         var result = service.update(1L, command);
 
         assertThat(result.getName()).isEqualTo("João Atualizado");
+        assertThat(result.getStatus()).isEqualTo(CustomerStatus.ACTIVE);
+    }
+
+    @Test
+    void shouldUpdateCustomerStatus() {
+        var customer = new Customer("João", "52998224725", "joao@email.com", null);
+        when(customers.findById(1L)).thenReturn(Optional.of(customer));
+
+        var command = new CustomerCommand("João", "529.982.247-25", "joao@email.com", null, CustomerStatus.INACTIVE);
+        var result = service.update(1L, command);
+
+        assertThat(result.getStatus()).isEqualTo(CustomerStatus.INACTIVE);
     }
 
     @Test

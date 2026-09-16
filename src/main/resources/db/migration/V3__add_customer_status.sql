@@ -1,0 +1,2 @@
+ALTER TABLE customers ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE';
+ALTER TABLE customers ADD CONSTRAINT customers_status_chk CHECK (status IN ('ACTIVE', 'INACTIVE'));

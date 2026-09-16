@@ -1,5 +1,6 @@
 package br.com.oficina.mvp.shared.config;
 
+import br.com.oficina.mvp.shared.security.InternalApiKeyAuthenticationFilter;
 import br.com.oficina.mvp.shared.security.JwtAuthenticationFilter;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -22,17 +23,23 @@ import java.util.Arrays;
 import java.util.List;
 
 @Configuration
-@EnableConfigurationProperties({JwtProperties.class, AppCorsProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, AppCorsProperties.class, InternalApiProperties.class})
 public class SecurityConfig {
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter,
+                                             InternalApiKeyAuthenticationFilter internalApiKeyAuthenticationFilter) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/api/public/**", "/api/health", "/actuator/health").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/health", "/actuator/health").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+
+                        .requestMatchers(HttpMethod.GET, "/api/public/service-orders/{code}").hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.POST, "/api/public/service-orders/{code}/approval").hasRole("CUSTOMER")
+
+                        .requestMatchers(HttpMethod.GET, "/api/internal/customers/{document}").hasRole("INTERNAL_SERVICE")
 
                         .requestMatchers(HttpMethod.GET, "/api/customers", "/api/customers/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
                         .requestMatchers(HttpMethod.POST, "/api/customers").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
@@ -63,7 +70,8 @@ public class SecurityConfig {
 
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(internalApiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

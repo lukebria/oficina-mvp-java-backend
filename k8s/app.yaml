@@ -70,6 +70,16 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: JWT_EXPIRES_IN_MINUTES
+            - name: CUSTOMER_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: CUSTOMER_JWT_SECRET
+            - name: INTERNAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: INTERNAL_API_KEY
             - name: CORS_ALLOWED_ORIGINS
               valueFrom:
                 configMapKeyRef:

@@ -12,8 +12,10 @@ import br.com.oficina.mvp.serviceorder.application.port.out.ServiceOrderReposito
 import br.com.oficina.mvp.serviceorder.domain.ServiceOrder;
 import br.com.oficina.mvp.serviceorder.domain.WorkOrderPart;
 import br.com.oficina.mvp.serviceorder.domain.WorkOrderService;
+import br.com.oficina.mvp.shared.config.JwtProperties;
 import br.com.oficina.mvp.shared.domain.Role;
 import br.com.oficina.mvp.shared.security.JwtService;
+import br.com.oficina.mvp.shared.security.TestCustomerTokens;
 import br.com.oficina.mvp.vehicle.application.port.out.VehicleRepositoryPort;
 import br.com.oficina.mvp.vehicle.domain.Vehicle;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,6 +60,8 @@ class LazyAssociationSerializationIntegrationTest {
     ServiceOrderRepositoryPort serviceOrders;
     @Autowired
     JwtService jwtService;
+    @Autowired
+    JwtProperties jwtProperties;
     @Autowired
     PasswordEncoder passwordEncoder;
 
@@ -118,7 +122,8 @@ class LazyAssociationSerializationIntegrationTest {
                 .andExpect(jsonPath("$.parts[0].name").value("Filtro de óleo"))
                 .andExpect(jsonPath("$.history").isArray());
 
-        mvc.perform(get("/api/public/service-orders/" + orderCode + "?document=" + document))
+        var customerToken = TestCustomerTokens.forDocument(document, jwtProperties.customerSecret());
+        mvc.perform(get("/api/public/service-orders/" + orderCode).header("Authorization", "Bearer " + customerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.customerName").value("Maria Souza"))
                 .andExpect(jsonPath("$.services[0].name").value(serviceName));
