@@ -65,9 +65,9 @@ state do Terraform, e autoscaling de nós.
 - [x] **Repositório tornado público** e branch padrão renomeada de `main` para `master` (alinhado com os outros
   dois repositórios) — isso também desbloqueou a checagem/configuração de branch protection via API, que antes
   era recusada pedindo GitHub Pro (repositório era privado).
-- [ ] A antiga branch `main` ainda existe no remoto, apontando pro mesmo commit que `master` (sobra do rename) —
-  pode ser excluída.
-- [ ] A branch `homolog` (criada nesta sessão, com a reescrita do README) ainda não tem PR aberto para `master`.
+- [x] Sobra da branch `main` antiga verificada e removida do remoto.
+- [x] PR da branch `homolog` (reescrita do README) aberto para `master` —
+  [#1](https://github.com/lukebria/oficina-mvp-infra-iac/pull/1).
 - [ ] **Gatilhos de `pull_request`/`push` apontam para uma branch `main-disabled`**, que não existe mais (a
   branch real agora é `master`) — hoje o workflow só roda via disparo manual (`workflow_dispatch`). Se a
   intenção é ter deploy automático (exigido pelo enunciado), trocar `main-disabled` por `master` nos gatilhos.
