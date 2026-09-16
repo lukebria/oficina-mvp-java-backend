@@ -9,7 +9,8 @@ Este documento **não decide** os pontos que o enunciado deixa em aberto — cad
 **decisão em aberto** e listado de novo, consolidado, na última seção. Já decididas pelo grupo: **nuvem = AWS**
 (Academy Learner Lab), **API Gateway = Kong**, e **banco = PostgreSQL via Amazon RDS** (provável — falta só
 confirmar na prática que o custo cabe no crédito do lab). Seguem em aberto: ferramenta de observabilidade,
-estratégia de homologação/produção, backend do state do Terraform e autoscaling de nós.
+estratégia de homologação/produção, backend do state do Terraform, autoscaling de nós, e a visibilidade do
+`oficina-mvp-infra-iac` (hoje privado, o que bloqueia configurar a proteção de branch exigida pelo enunciado).
 
 ## Repositórios exigidos vs. existentes
 
@@ -155,6 +156,30 @@ hoje só existem no `terraform.tfvars` local de quem já aplicou manualmente.
 poucas horas — mesmo depois de configuradas pela primeira vez, alguém do grupo vai precisar **atualizar esses
 secrets manualmente em cada um dos três repositórios** toda vez que a sessão do lab for renovada. Não é uma
 configuração única; é uma tarefa recorrente enquanto o projeto usar esse tipo de conta.
+
+### 2.6 Proteção das branches principais (main/master) — exigência explícita do enunciado
+
+O enunciado exige, na seção "Regras de proteção": branch `main`/`master` protegida (sem commit direto) e PR
+obrigatório para merge. Status real hoje, conferido via API do GitHub:
+
+| Repositório              | Branch principal                          | Visibilidade | Protegida hoje? |
+|---------------------------|--------------------------------------------|--------------|------------------|
+| `oficina-mvp-java`        | `master`                                   | pública      | ❌ não ("Branch not protected") |
+| `oficina-auth-function`   | `homolog` (default errado — ver 2.1)       | pública      | ❌ não |
+| `oficina-mvp-infra-iac`   | `main`                                     | **privada**  | ⚠️ nem verificável/configurável no plano atual — a própria API do GitHub recusou o pedido pedindo "Upgrade to GitHub Pro or make this repository public" |
+
+Configuração mínima que cada branch principal precisa ter, para atender o enunciado:
+- Exigir Pull Request antes de merge (sem push direto na branch).
+- Bloquear force-push e exclusão da branch.
+- (Não exigido explicitamente pelo enunciado, mas recomendável) exigir pelo menos 1 aprovação antes do merge.
+
+Ações:
+- [ ] `oficina-mvp-java` (`master`) — repositório público, dá pra configurar agora.
+- [ ] `oficina-auth-function` — corrigir primeiro a branch padrão para `master` (ver 2.1); repositório também é
+  público, dá pra configurar depois disso.
+- [ ] `oficina-mvp-infra-iac` (`main`) — bloqueado pela combinação repositório privado + plano gratuito do
+  GitHub. **Decisão em aberto**: tornar o repositório público, ou assinar um plano pago (Pro/Team) para
+  habilitar branch protection em repositório privado.
 
 ---
 
@@ -327,3 +352,12 @@ Serverless v2 tem um consumo mínimo cobrado por hora enquanto a instância exis
 - **Adicionar Karpenter** — mesma dinâmica de custo do Cluster Autoscaler (também sobe nós novos sob demanda),
   com a complexidade de configuração ainda maior — provavelmente o que menos se encaixa numa entrega com
   restrição de "só free/crédito de estudante".
+
+### 7. Visibilidade do `oficina-mvp-infra-iac` (bloqueia a proteção de branch)
+
+- **Tornar o repositório público** — mesma visibilidade dos outros dois repositórios; libera branch protection
+  de graça, sem custo nenhum. Ponto de atenção: qualquer segredo que porventura já tenha sido commitado no
+  histórico do repositório ficaria visível (vale um `git log`/busca por segredo antes de trocar a visibilidade).
+- **Assinar GitHub Pro/Team** — mantém o repositório privado e libera branch protection mesmo assim; tem custo
+  de assinatura, o que pode não se encaixar na restrição de "só free/crédito de estudante" já colocada para a
+  parte de cloud.
