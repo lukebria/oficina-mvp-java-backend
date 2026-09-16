@@ -45,11 +45,10 @@ estratégia de homologação/produção, backend do state do Terraform, autoscal
 - [x] Código da function + Terraform de deploy (Lambda, IAM, log group, HTTP API) — feito.
 - [ ] **Pipeline de CI/CD** — não existe nenhum workflow neste repositório; hoje o deploy é `terraform apply`
   manual, executado localmente.
-- [ ] **Branch padrão do repositório está como `homolog`**, não `master`/`main` — efeito colateral de termos
-  empurrado a branch `homolog` antes da `master` num repositório recém-criado. Corrigir em
-  Settings → Branches → Default branch antes de configurar qualquer regra de proteção.
-- [ ] Branch principal protegida contra commit direto + PR obrigatório para merge — não configurado
-  (API do GitHub confirma "Branch not protected" na branch padrão atual).
+- [x] **Branch padrão corrigida para `master`** (estava como `homolog` por efeito colateral de termos
+  empurrado essa branch antes da `master` num repositório recém-criado).
+- [ ] Branch `master` protegida contra commit direto + PR obrigatório para merge — ainda não configurado
+  (API do GitHub confirma "Branch not protected").
 - [ ] Deploy automático diferenciando branch de homologação e branch de produção — hoje não existe pipeline
   nenhuma, então também não existe essa distinção.
 - [ ] **Usuário `soat-architecture` não está entre os colaboradores deste repositório** — adicionar (confirmado
@@ -165,7 +164,7 @@ obrigatório para merge. Status real hoje, conferido via API do GitHub:
 | Repositório              | Branch principal                          | Visibilidade | Protegida hoje? |
 |---------------------------|--------------------------------------------|--------------|------------------|
 | `oficina-mvp-java`        | `master`                                   | pública      | ❌ não ("Branch not protected") |
-| `oficina-auth-function`   | `homolog` (default errado — ver 2.1)       | pública      | ❌ não |
+| `oficina-auth-function`   | `master` (default já corrigido — ver 2.1)  | pública      | ❌ não |
 | `oficina-mvp-infra-iac`   | `main`                                     | **privada**  | ⚠️ nem verificável/configurável no plano atual — a própria API do GitHub recusou o pedido pedindo "Upgrade to GitHub Pro or make this repository public" |
 
 Configuração mínima que cada branch principal precisa ter, para atender o enunciado:
@@ -175,8 +174,8 @@ Configuração mínima que cada branch principal precisa ter, para atender o enu
 
 Ações:
 - [ ] `oficina-mvp-java` (`master`) — repositório público, dá pra configurar agora.
-- [ ] `oficina-auth-function` — corrigir primeiro a branch padrão para `master` (ver 2.1); repositório também é
-  público, dá pra configurar depois disso.
+- [ ] `oficina-auth-function` (`master`) — branch padrão já corrigida; repositório público, dá pra configurar
+  agora.
 - [ ] `oficina-mvp-infra-iac` (`main`) — bloqueado pela combinação repositório privado + plano gratuito do
   GitHub. **Decisão em aberto**: tornar o repositório público, ou assinar um plano pago (Pro/Team) para
   habilitar branch protection em repositório privado.
