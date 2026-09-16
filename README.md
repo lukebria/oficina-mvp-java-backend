@@ -27,6 +27,7 @@ automático, aprovação pelo cliente, histórico de status e relatório de temp
 - [Vídeo demonstrativo](#vídeo-demonstrativo)
 - [Documentação complementar](#documentação-complementar)
 - [Pontos de atenção](#pontos-de-atenção)
+- [Roadmap / TODO](#roadmap--todo)
 
 ## Stack
 
@@ -253,6 +254,10 @@ Health:     http://localhost:3000/api/health
 Actuator:   http://localhost:3000/actuator/health
 ```
 
+> Isso sobe só este backend. Para exercitar as rotas públicas de OS (que exigem token de cliente), também é
+> preciso rodar a `oficina-auth-function` — ver
+> [Testando o fluxo público localmente](#testando-o-fluxo-público-localmente-com-a-function).
+
 ## Como rodar com Docker
 
 Para subir banco e API juntos:
@@ -313,11 +318,18 @@ kubectl apply -f k8s/hpa.yaml
 
 ## Infraestrutura como código (Terraform)
 
-O provisionamento do cluster Kubernetes (EKS) e do banco de dados via Terraform está sendo feito em um
-**repositório de infraestrutura separado**  - fora deste repositório.
+O provisionamento do cluster Kubernetes (EKS) e do repositório ECR é feito via Terraform no repositório
+[`oficina-mvp-infra-iac`](https://github.com/lukebria/oficina-mvp-infra-iac) — fora deste repositório. Ele
+provisiona o cluster `oficina-mecnica-lab-cluster` e o ECR `oficina-mecnica-lab` numa conta de **AWS Academy
+Learner Lab** (credenciais temporárias com session token, role `LabRole` fixa do ambiente — sem IAM role
+própria).
 
-Enquanto isso, a pipeline deste repositório assume um cluster EKS **já existente**, chamado
-`oficina-mecnica-lab-cluster` (ver `aws eks update-kubeconfig` em `.github/workflows/app-deploy.yml`).
+O banco de dados **não** é provisionado por Terraform em lugar nenhum hoje — ele roda como um `Deployment` comum
+de Postgres dentro do mesmo cluster (`k8s/banco.yaml`, neste repositório), sem backup nem alta disponibilidade.
+Ver [Roadmap / TODO](#roadmap--todo).
+
+Enquanto isso, a pipeline deste repositório assume que o cluster e o ECR **já existem** (ver
+`aws eks update-kubeconfig` em `.github/workflows/app-deploy.yml`).
 
 ## Variáveis de ambiente
 
@@ -331,8 +343,10 @@ As variáveis estão documentadas no `.env.example` e são lidas pelo `applicati
 | `DB_NAME`                | `oficina_mvp`                                                  | Nome do banco               |
 | `DB_USER`                | `oficina`                                                      | Usuário do banco            |
 | `DB_PASSWORD`            | `oficina`                                                      | Senha do banco              |
-| `JWT_SECRET`             | `troque-este-segredo-em-producao-com-pelo-menos-32-caracteres` | Segredo de assinatura JWT   |
+| `JWT_SECRET`             | `troque-este-segredo-em-producao-com-pelo-menos-32-caracteres` | Segredo de assinatura do JWT administrativo (login por e-mail/senha) |
 | `JWT_EXPIRES_IN_MINUTES` | `480` no `application.yml`; `30` no `.env.example`             | Expiração do JWT em minutos |
+| `CUSTOMER_JWT_SECRET`    | `troque-este-segredo-de-cliente-em-producao-com-pelo-menos-32-caracteres` | Segredo dedicado do JWT do fluxo público (autenticação via CPF), emitido pela Function Serverless externa |
+| `INTERNAL_API_KEY`       | `troque-esta-chave-interna-em-producao`                       | Chave de serviço-a-serviço para `GET /api/internal/customers/{document}` (consumido pela Function Serverless externa) |
 | `CORS_ALLOWED_ORIGINS`   | `http://localhost:5173,http://localhost:3000`                  | Origens permitidas no CORS  |
 | `SEED_ADMIN_EMAIL`       | `admin@oficina.com`                                            | Email do admin inicial      |
 | `SEED_ADMIN_PASSWORD`    | `Admin@123`                                                    | Senha do admin inicial      |
@@ -408,14 +422,60 @@ Authorization: Bearer <token>
 ### Rotas públicas
 
 - `POST /api/auth/login`
-- `/api/public/**`
 - `/api/health`
 - `/actuator/health`
 - `/swagger-ui.html`
 - `/swagger-ui/**`
 - `/v3/api-docs/**`
 
-As demais rotas exigem JWT.
+As demais rotas exigem JWT. `/api/public/service-orders/**` **não** é mais uma rota aberta — veja
+[Autenticação via CPF (fluxo público do cliente)](#autenticação-via-cpf-fluxo-público-do-cliente) — e
+`/api/internal/**` exige a chave de serviço `INTERNAL_API_KEY`, não um JWT.
+
+### Autenticação via CPF (fluxo público do cliente)
+
+**Rotas que exigem o token emitido pela [`oficina-auth-function`](https://github.com/lukebria/oficina-auth-function)** (nenhuma outra rota
+deste backend depende dela):
+
+```http
+GET  /api/public/service-orders/{code}
+POST /api/public/service-orders/{code}/approval
+Authorization: Bearer <token-cliente>
+```
+
+Todas as demais rotas seguem com o JWT administrativo (`POST /api/auth/login`) ou a `X-Internal-Api-Key`
+(`/api/internal/**`) — só estas duas dependem de um token vindo da Function externa.
+
+Esse token **não é emitido por este backend** — é emitido por uma Function Serverless em outro repositório, que:
+
+1. valida o CPF informado pelo cliente;
+2. consulta `GET /api/internal/customers/{document}` (autenticado por `X-Internal-Api-Key: <INTERNAL_API_KEY>`) para
+   confirmar que o cliente existe e está `ACTIVE` — resposta traz `status`: `ACTIVE`, `INACTIVE` ou `NOT_FOUND`
+   (quando o documento não corresponde a nenhum cliente);
+3. assina um JWT com `CUSTOMER_JWT_SECRET` (segredo dedicado, diferente do `JWT_SECRET` administrativo), claims
+   `sub` = documento normalizado (só dígitos) e `role` = `"CUSTOMER"`.
+
+O documento do cliente autenticado vem sempre do token (nunca de um parâmetro de request) — por isso o token só
+permite consultar/aprovar a OS do próprio CPF, mesmo que o cliente tente informar outro código. Além disso,
+`JwtAuthenticationFilter` revalida o status do cliente **a cada request**: se o cliente for marcado `INACTIVE`
+depois de o token ter sido emitido, esse token para de autenticar imediatamente, sem esperar expirar.
+
+### Testando o fluxo público localmente (com a Function)
+
+Pra exercitar `GET /api/public/service-orders/{code}` e `POST /api/public/service-orders/{code}/approval` de
+ponta a ponta em ambiente local, é preciso rodar também a
+[`oficina-auth-function`](https://github.com/lukebria/oficina-auth-function), que é quem emite o token de cliente:
+
+1. Suba este backend normalmente (ver [Como rodar localmente](#como-rodar-localmente)).
+2. No `.env` da function, aponte `BACKEND_BASE_URL` para `http://localhost:3000` e use os **mesmos valores** de
+   `INTERNAL_API_KEY` e `CUSTOMER_JWT_SECRET` configurados no `.env` deste backend — os dois lados têm que
+   compartilhar os mesmos segredos, senão a consulta interna ou a validação do JWT falham.
+3. Rode a function localmente (`npm test` valida a lógica; para invocar o handler de fato é preciso simular um
+   evento de API Gateway, já que o repositório da function não inclui infra local tipo SAM CLI).
+4. Use o token retornado pela function no header `Authorization: Bearer <token>` das rotas públicas acima.
+
+Sem a function rodando (ou sem os segredos batendo), essas duas rotas sempre respondem `401`, já que não há
+outra forma de emitir esse token.
 
 ### Autorização por perfil
 
@@ -446,6 +506,9 @@ aplicado via `hasRole`/`hasAnyRole` em `SecurityConfig`. Fora dessa lista, qualq
 | `/api/service-orders/{id}/status`             | PATCH  | ADMIN, MECHANIC            |
 | `/api/service-orders/{id}/diagnosis`          | PATCH  | ADMIN, MECHANIC            |
 | `/api/reports/average-execution-time`         | GET    | ADMIN                      |
+| `/api/public/service-orders/{code}`           | GET    | CUSTOMER (token via CPF)   |
+| `/api/public/service-orders/{code}/approval`  | POST   | CUSTOMER (token via CPF)   |
+| `/api/internal/customers/{document}`          | GET    | `X-Internal-Api-Key` (não é role de JWT) |
 
 `GET /api/health` e `GET /actuator/health` foram mantidos públicos (sem exigir role) para não quebrar a convenção de
 healthcheck usada por orquestradores/monitoramento — não fazem sentido exigir ADMIN para um probe de liveness.
@@ -512,8 +575,16 @@ PATCH /api/service-orders/{id}/diagnosis
 ### Ordens de serviço — fluxo público do cliente
 
 ```http
-GET  /api/public/service-orders/{code}?document=12345678909
+GET  /api/public/service-orders/{code}
 POST /api/public/service-orders/{code}/approval
+Authorization: Bearer <token-cliente>
+```
+
+### Consulta interna de cliente (Function Serverless)
+
+```http
+GET /api/internal/customers/{document}
+X-Internal-Api-Key: <INTERNAL_API_KEY>
 ```
 
 ### Relatórios
@@ -538,9 +609,14 @@ GET /actuator/health
   "name": "Maria Cliente",
   "document": "12345678909",
   "email": "maria@email.com",
-  "phone": "11999999999"
+  "phone": "11999999999",
+  "status": "ACTIVE"
 }
 ```
+
+`status` é opcional (`ACTIVE`/`INACTIVE`); quando omitido no `POST`, o cliente é criado como `ACTIVE`. No `PUT`,
+omitir o campo mantém o status atual. Um cliente `INACTIVE` **não consegue mais autenticar** no fluxo público via
+CPF, mesmo com um token ainda válido — ver [Autenticação via CPF](#autenticação-via-cpf-fluxo-público-do-cliente).
 
 ### Criar veículo
 
@@ -695,7 +771,8 @@ Authorization: Bearer <token>
 ### Consultar OS publicamente
 
 ```http
-GET /api/public/service-orders/OS-20260101-12345?document=12345678909
+GET /api/public/service-orders/OS-20260101-12345
+Authorization: Bearer <token-cliente>
 ```
 
 ### Decidir aprovação do orçamento publicamente
@@ -703,17 +780,19 @@ GET /api/public/service-orders/OS-20260101-12345?document=12345678909
 ```http
 POST /api/public/service-orders/OS-20260101-12345/approval
 Content-Type: application/json
+Authorization: Bearer <token-cliente>
 ```
 
 ```json
 {
-  "document": "12345678909",
   "approved": true,
   "comment": "Aprovado pelo cliente."
 }
 ```
 
-`approved: false` recusa o orçamento (status vai para `RECUSADA`); a OS precisa estar em `AGUARDANDO_APROVACAO`.
+`approved: false` recusa o orçamento (status vai para `RECUSADA`); a OS precisa estar em `AGUARDANDO_APROVACAO`. O
+documento do cliente vem do token (ver [Autenticação via CPF](#autenticação-via-cpf-fluxo-público-do-cliente)), não
+mais do corpo da requisição.
 
 ## Fluxo de status da OS
 
@@ -865,6 +944,11 @@ docs/MER.drawio
 
 Modelo entidade-relacionamento visual do banco.
 
+[github.com/lukebria/oficina-auth-function](https://github.com/lukebria/oficina-auth-function)
+
+Function Serverless (Node/TypeScript) que emite o JWT do fluxo público de cliente — ver
+[Autenticação via CPF](#autenticação-via-cpf-fluxo-público-do-cliente).
+
 ## Pontos de atenção
 
 - O domínio de cada módulo é um POJO puro, sem nenhuma anotação JPA; a entidade de persistência (`XJpaEntity`) e o
@@ -883,3 +967,39 @@ Modelo entidade-relacionamento visual do banco.
   `ServiceOrderService` checa `existsByCode` e gera um novo código em caso de colisão (até 5 tentativas); no Postgres
   não dá pra simplesmente capturar a violação de constraint e tentar de novo na mesma transação, porque um erro de
   banco aborta a transação inteira até um rollback.
+- `JwtAuthenticationFilter` valida dois tipos de token com chaves diferentes: `JWT_SECRET` (login administrativo,
+  `sub` = id numérico em `users`) e `CUSTOMER_JWT_SECRET` (fluxo público via CPF, `sub` = documento, emitido por uma
+  Function Serverless externa). Ele tenta a chave administrativa primeiro; só tenta a de cliente se a assinatura
+  não bater com a primeira. Um cliente autenticado é sempre revalidado contra `CustomerRepositoryPort` — o
+  documento do token precisa existir em `customers` **e** o status precisa ser `ACTIVE` — da mesma forma que um
+  token administrativo é revalidado contra `UserRepositoryPort`.
+- `Customer` tem um campo `status` persistido (`ACTIVE`/`INACTIVE`, default `ACTIVE`, migration
+  `V3__add_customer_status.sql`), editável pelo CRUD admin (`POST`/`PUT /api/customers`). `NOT_FOUND` **não** é um
+  valor persistido — só aparece na resposta de `GET /api/internal/customers/{document}` quando o documento não
+  corresponde a nenhum cliente. Um cliente `INACTIVE` não é bloqueado de nada no fluxo administrativo (CRUD, OS
+  criada/gerenciada pela equipe da oficina) — só de autenticar no fluxo público via CPF.
+
+## Roadmap / TODO
+
+**Organizar o projeto em quatro repositórios separados, cada um com CI/CD próprio (GitHub Actions, GitLab CI etc.)
+e deploy automático para a nuvem:**
+
+1. **Lambda (Function Serverless)** — já é o repositório [`oficina-auth-function`](https://github.com/lukebria/oficina-auth-function), mas
+   ainda sem pipeline: o deploy hoje é um `terraform apply` manual (ver [Deploy (Terraform)](https://github.com/lukebria/oficina-auth-function#deploy-terraform)
+   e a lista de configuração pendente lá).
+2. **Infraestrutura Kubernetes (Terraform)** — **já existe**, no repositório
+   [`oficina-mvp-infra-iac`](https://github.com/lukebria/oficina-mvp-infra-iac) (provisiona EKS + ECR numa conta
+   de AWS Academy Learner Lab). Já tem pipeline (`create_iac.yml`/`destroy_iac.yml`), mas os gatilhos de
+   PR/push apontam para uma branch `main-disabled` — hoje só roda via disparo manual; falta reativar o gatilho
+   automático (se for essa a intenção) e adicionar lock de state (DynamoDB).
+3. **Infraestrutura do Banco de Dados Gerenciado (Terraform)** — **hoje não existe em lugar nenhum**: o Postgres
+   roda como um `Deployment` comum dentro do mesmo cluster EKS (`k8s/banco.yaml`, imagem `postgres:15-alpine`,
+   sem backup/HA), versionado neste mesmo repositório — não é provisionado nem pelo Terraform deste repositório
+   nem pelo `oficina-mvp-infra-iac`. Precisa virar um banco gerenciado (ex: RDS) provisionado por Terraform em
+   seu próprio repositório, com backup e alta disponibilidade de verdade.
+4. **Aplicação principal rodando em Kubernetes** — é este repositório (`oficina-mvp-java`) hoje: código da API +
+   manifests de deploy da aplicação (`k8s/app.yaml`, `k8s/hpa.yaml`, `k8s/config-secret.yaml`) + pipeline
+   (`.github/workflows/app-deploy.yml`) que já builda, testa, escaneia (SonarQube) e publica a imagem. Ficaria
+   restrito a só isso, sem `k8s/banco.yaml`, depois que o item 3 for extraído.
+
+Nenhum desses quatro pontos está implementado como planejado ainda — fica registrado aqui como direção futura.
