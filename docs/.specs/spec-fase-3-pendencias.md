@@ -72,7 +72,8 @@ state do Terraform, e autoscaling de nós.
   intenção é ter deploy automático (exigido pelo enunciado), trocar `main-disabled` por `master` nos gatilhos.
 - [x] **Bug encontrado e corrigido**: o job `apply` checava `github.ref == 'refs/heads/main'` — como a branch
   foi renomeada pra `master`, isso fazia até um disparo manual (`workflow_dispatch`) na `master` pular o apply
-  silenciosamente. Corrigido em [#2](https://github.com/lukebria/oficina-mvp-infra-iac/pull/2).
+  silenciosamente. Corrigido e mergeado em `master` —
+  [#2](https://github.com/lukebria/oficina-mvp-infra-iac/pull/2).
 - [x] Branch `master` protegida + PR obrigatório (ver 2.6).
 - [ ] Deploy automático diferenciando homologação/produção — existe a branch `homolog`, mas nenhum workflow
   dispara automaticamente nela hoje.
