@@ -185,6 +185,21 @@ acesso de admin no repositório, pra realmente não ter "commit direto" possíve
 - [x] `oficina-auth-function` (`master`)
 - [x] `oficina-mvp-infra-iac` (`master`)
 
+### 2.7 Sincronização `homolog` ↔ `master` — ✅ equalizadas nos três repositórios
+
+Conferido commit a commit (`git log branchA..branchB`) nos três repositórios: `homolog` e `master` apontam
+para o mesmo commit em todos.
+
+- [x] `oficina-mvp-java` — `homolog` estava 2 commits atrás de `master` (merges dos PRs #24/#25); avançada por
+  fast-forward.
+- [x] `oficina-mvp-infra-iac` — `homolog` estava 3 commits atrás de `master` (merges dos PRs #1/#2); avançada
+  por fast-forward.
+- [x] `oficina-auth-function` — caso à parte: `master` é que estava **atrás** de `homolog`, faltando o merge do
+  PR #1 e um commit direto que tinha sido feito em `master` — indício de que `master` foi resetada/revertida
+  para um ponto anterior em algum momento (causa não identificada). Restaurado via
+  [PR #2](https://github.com/lukebria/oficina-auth-function/pull/2) (`homolog` → `master`), e depois `homolog`
+  avançada por fast-forward para reequalizar.
+
 ---
 
 ## 3. Infraestrutura obrigatória (checklist geral)
