@@ -133,4 +133,6 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 3000
-  type: LoadBalancer
+  # Tráfego externo agora entra pelo Kong (Service LoadBalancer no namespace `kong`,
+  # ver oficina-mvp-infra-iac); este Service só precisa ser alcançável de dentro do cluster.
+  type: ClusterIP

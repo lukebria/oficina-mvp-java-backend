@@ -176,7 +176,9 @@ flowchart LR
     subgraph AWS["AWS"]
         ECR[("Amazon ECR<br/>oficina-mecnica-lab")]
         subgraph EKS["Amazon EKS Cluster"]
-            LB["Service oficina-app-service<br/>(LoadBalancer)"]
+            KONGLB["Service kong-proxy<br/>(LoadBalancer, namespace kong)"]
+            ING["Ingress oficina-app-ingress<br/>(ingressClassName: kong)"]
+            SVC["Service oficina-app-service<br/>(ClusterIP)"]
             HPA{{"HPA oficina-app-hpa<br/>2–5 réplicas · CPU 70%"}}
             subgraph Pods["Deployment oficina-app-deployment"]
                 POD1["Pod app"]
@@ -190,8 +192,10 @@ flowchart LR
         end
     end
 
-    INTERNET(("Internet")) --> LB
-    LB --> Pods
+    INTERNET(("Internet")) --> KONGLB
+    KONGLB -->|"rotas do Ingress"| ING
+    ING --> SVC
+    SVC --> Pods
     HPA -. escala .-> Pods
     CM --> Pods
     SEC2 --> Pods
@@ -202,8 +206,10 @@ flowchart LR
     REPO --> GHA
 ```
 
-> A infraestrutura como código (Terraform) do cluster e do banco é provisionada em um repositório separado — ver
-> [Infraestrutura como código (Terraform)](#infraestrutura-como-código-terraform).
+> O Kong (API Gateway) é provisionado no cluster pelo repositório `oficina-mvp-infra-iac` (via Helm, modo
+> DB-less com Ingress Controller habilitado); este repositório só declara o `Ingress` (`k8s/ingress.yaml`) que
+> aponta pra ele. É um gateway distinto do usado pela `oficina-auth-function` (que tem seu próprio API Gateway
+> da AWS na frente da Lambda) — ver [Infraestrutura como código (Terraform)](#infraestrutura-como-código-terraform).
 
 ## Como rodar localmente
 
@@ -278,6 +284,20 @@ Para remover também o volume do banco:
 docker compose down -v
 ```
 
+### Testando o Kong (API Gateway) localmente
+
+O `docker-compose.yml` também sobe um serviço `kong` (modo DB-less, config declarativa em
+[`kong/kong.yml`](kong/kong.yml)) na porta `8000`, reproduzindo localmente o mesmo papel do Kong que roda no
+EKS (provisionado pelo `oficina-mvp-infra-iac`) — útil pra validar o roteamento sem gastar crédito do lab AWS:
+
+```bash
+docker compose up -d --build
+curl http://localhost:8000/api/health
+```
+
+A resposta deve ser igual à de `curl http://localhost:3000/api/health` direto na API — a diferença é que a
+chamada passou pelo Kong antes de chegar no serviço `api`.
+
 O `Dockerfile` usa build multi-stage:
 
 1. imagem Maven com Eclipse Temurin 25 para empacotar o projeto;
@@ -291,8 +311,12 @@ Os manifests ficam em [`/k8s`](k8s):
 |-----------------------|--------------------------------------------------------------------------------------------------|
 | `config-secret.yaml`  | `ConfigMap app-config` + `Secret app-secrets` (credenciais de banco, JWT, admin seed e e-mail)   |
 | `banco.yaml`          | `Deployment banco-deployment` + `Service banco-service` (PostgreSQL)                             |
-| `app.yaml`            | `Deployment oficina-app-deployment` (com `resources.requests/limits`) + `Service` (LoadBalancer) |
+| `app.yaml`            | `Deployment oficina-app-deployment` (com `resources.requests/limits`) + `Service` (ClusterIP)    |
 | `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (2 a 5 réplicas, CPU 70%)                               |
+| `ingress.yaml`        | `Ingress oficina-app-ingress` (`ingressClassName: kong`) — rota que o Kong usa pra encontrar o Service da app |
+
+> O `Service` da aplicação é `ClusterIP` — quem recebe tráfego externo é o `Service` do Kong (`kong-proxy`,
+> namespace `kong`), provisionado no repositório [`oficina-mvp-infra-iac`](https://github.com/lukebria/oficina-mvp-infra-iac).
 
 ### Via CI/CD (automático)
 
@@ -309,7 +333,11 @@ kubectl apply -f k8s/config-secret.yaml
 kubectl apply -f k8s/banco.yaml
 kubectl apply -f k8s/app.yaml
 kubectl apply -f k8s/hpa.yaml
+kubectl apply -f k8s/ingress.yaml
 ```
+
+> `k8s/ingress.yaml` só tem efeito se o Kong (com o Ingress Controller habilitado) já estiver instalado no
+> cluster — ver `oficina-mvp-infra-iac`.
 
 > ⚠️ `k8s/config-secret.yaml` e `k8s/app.yaml` têm placeholders (`${DB_PASSWORD}`, `${JWT_SECRET}`,
 > `${SEED_ADMIN_PASSWORD}`, `${ECR_REPOSITORY_URL}`) que na pipeline são substituídos via `envsubst`/`sed` a partir de
