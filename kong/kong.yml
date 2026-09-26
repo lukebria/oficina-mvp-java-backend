@@ -1,0 +1,12 @@
+# Configuração declarativa do Kong para teste LOCAL (Docker Compose), modo DB-less.
+# No EKS, o roteamento equivalente vem do Ingress Controller do Kong lendo
+# k8s/ingress.yaml — este arquivo é só para reproduzir o mesmo caminho localmente.
+_format_version: "3.0"
+
+services:
+  - name: oficina-mvp-api
+    url: http://api:3000
+    routes:
+      - name: oficina-mvp-api-route
+        paths:
+          - /

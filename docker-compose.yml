@@ -38,5 +38,21 @@ services:
     ports:
       - "3000:3000"
 
+  # Reproduz localmente o mesmo papel do Kong no EKS (ver oficina-mvp-infra-iac):
+  # roteia o tráfego para a API em vez de expor a porta 3000 direto.
+  kong:
+    image: kong:3.7
+    container_name: oficina-mvp-kong
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+    volumes:
+      - ./kong/kong.yml:/kong/kong.yml:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      - api
+
 volumes:
   oficina_pg_data:
