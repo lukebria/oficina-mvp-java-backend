@@ -361,10 +361,12 @@ kubectl apply -f k8s/ingress.yaml
 > `k8s/ingress.yaml` só tem efeito se o Kong (com o Ingress Controller habilitado) já estiver instalado no
 > cluster — ver `oficina-mvp-infra-iac`.
 
-> ⚠️ `k8s/config-secret.yaml` e `k8s/app.yaml` têm placeholders (`${DB_PASSWORD}`, `${JWT_SECRET}`,
+> ⚠️ `k8s/config-secret.yaml` e `k8s/app.yaml` têm placeholders (`${DB_HOST}`, `${DB_PASSWORD}`, `${JWT_SECRET}`,
 > `${SEED_ADMIN_PASSWORD}`, `${ECR_REPOSITORY_URL}`) que na pipeline são substituídos via `envsubst`/`sed` a partir de
-> GitHub Secrets antes do `apply`. Para aplicar manualmente, substitua esses valores você mesmo antes de rodar os
-> comandos acima.
+> GitHub Secrets/Variables antes do `apply`. Para aplicar manualmente, substitua esses valores você mesmo antes de
+> rodar os comandos acima. `DB_HOST` cai no fallback `banco-service` (Postgres em pod) enquanto a variável
+> `DB_HOST` não estiver configurada no GitHub — passa a apontar para o RDS (`oficina-mvp-infra-db`) só de trocar
+> essa variable, sem precisar editar YAML nem a pipeline.
 
 ## Infraestrutura como código (Terraform)
 

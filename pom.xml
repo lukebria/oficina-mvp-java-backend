@@ -84,6 +84,15 @@
             <artifactId>opentelemetry-exporter-otlp</artifactId>
         </dependency>
 
+        <!-- Registry de métricas OTLP - sem isso, as métricas de negócio (BusinessMetrics) ficam só visíveis
+             localmente via /actuator/metrics, nunca saem para o New Relic (a dependência acima cobre só
+             traces, não métricas). Exportação desligada por padrão via management.otlp.metrics.export.enabled
+             (application.yml). -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-otlp</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
