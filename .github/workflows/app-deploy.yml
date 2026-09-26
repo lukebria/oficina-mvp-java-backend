@@ -186,6 +186,9 @@ jobs:
           NAMESPACE: ${{ steps.env.outputs.namespace }}
           INGRESS_HOST: ${{ steps.env.outputs.ingress_host }}
           # Mapeamento dos GitHub Secrets para variáveis do ambiente de execução
+          # DB_HOST: enquanto a variável DB_HOST não for configurada (RDS ainda não existe), cai no fallback
+          # "banco-service" (Postgres em pod) - ver plans/01-infra-db-novo-repo.md.
+          DB_HOST: ${{ vars.DB_HOST || 'banco-service' }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           CUSTOMER_JWT_SECRET: ${{ secrets.CUSTOMER_JWT_SECRET }}
@@ -199,7 +202,7 @@ jobs:
 
         run: |
           # 1. Substitui os placeholders de Secrets no config-secret.yaml
-          envsubst '${DB_PASSWORD} ${JWT_SECRET} ${CUSTOMER_JWT_SECRET} ${INTERNAL_API_KEY} ${SEED_ADMIN_PASSWORD} ${MAIL_USERNAME} ${MAIL_PASSWORD} ${MAIL_FROM} ${MAIL_HOST} ${MAIL_PORT}' < k8s/config-secret.yaml > k8s/config-secret.tmp.yaml
+          envsubst '${DB_HOST} ${DB_PASSWORD} ${JWT_SECRET} ${CUSTOMER_JWT_SECRET} ${INTERNAL_API_KEY} ${SEED_ADMIN_PASSWORD} ${MAIL_USERNAME} ${MAIL_PASSWORD} ${MAIL_FROM} ${MAIL_HOST} ${MAIL_PORT}' < k8s/config-secret.yaml > k8s/config-secret.tmp.yaml
           mv k8s/config-secret.tmp.yaml k8s/config-secret.yaml
 
           # 2. Substitui o placeholder da Imagem Docker no app.yaml
