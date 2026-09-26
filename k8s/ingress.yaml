@@ -6,7 +6,11 @@ metadata:
 spec:
   ingressClassName: kong
   rules:
-    - http:
+    # ${INGRESS_HOST} é substituído pelo pipeline (homolog.oficina-mvp.local / prod.oficina-mvp.local)
+    # conforme o namespace de destino - necessário porque os dois ambientes rodam no mesmo cluster/Kong
+    # e um Ingress sem host, em path "/", colidiria entre namespaces diferentes.
+    - host: ${INGRESS_HOST}
+      http:
         paths:
           - path: /
             pathType: Prefix

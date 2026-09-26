@@ -1,7 +1,12 @@
-# Oficina MVP Backend — Java 25 + Spring Boot 4
+# Oficina MVP Backend — Java 21 + Spring Boot 4
 
-Back-end monolítico para um MVP de **oficina mecânica**, desenvolvido com **Java 25**, **Spring Boot 4**, **Maven**, *
+Back-end monolítico para um MVP de **oficina mecânica**, desenvolvido com **Java 21**, **Spring Boot 4**, **Maven**, *
 *PostgreSQL**, **JPA/Hibernate**, **Flyway**, **Spring Security**, **JWT** e **Swagger/OpenAPI**.
+
+> Nota: o build (`pom.xml`, `java.version`/`release`) tem como alvo o **Java 21**. O `Dockerfile` usa imagens
+> `Java 25` só para compilar e rodar (JRE 25 executa bytecode compilado para o release 21 normalmente) — se isso
+> for intencional (antecipar upgrade de runtime), tudo certo; do contrário, considerar alinhar as imagens do
+> Dockerfile para Java 21 também.
 
 O projeto permite gerenciar clientes, veículos, catálogo de serviços, peças/insumos, ordens de serviço, orçamento
 automático, aprovação pelo cliente, histórico de status e relatório de tempo médio de execução.
@@ -33,7 +38,7 @@ automático, aprovação pelo cliente, histórico de status e relatório de temp
 
 | Item                | Tecnologia                     |
 |---------------------|--------------------------------|
-| Linguagem           | Java 25                        |
+| Linguagem           | Java 21 (build); imagens Java 25 no Dockerfile |
 | Framework           | Spring Boot 4.0.6              |
 | Build               | Maven                          |
 | API                 | Spring WebMVC                  |
@@ -211,11 +216,24 @@ flowchart LR
 > aponta pra ele. É um gateway distinto do usado pela `oficina-auth-function` (que tem seu próprio API Gateway
 > da AWS na frente da Lambda) — ver [Infraestrutura como código (Terraform)](#infraestrutura-como-código-terraform).
 
+### Homolog vs. produção (namespaces + host do Ingress)
+
+`homolog` e `master` fazem deploy nos namespaces `homolog`/`prod` (já provisionados via Terraform em
+`oficina-mvp-infra-iac/namespaces.tf`), no mesmo cluster/Kong — o pipeline (`app-deploy.yml`) escolhe o
+namespace pela branch de origem. Como os dois ambientes compartilham o mesmo Kong, o `Ingress` de cada um
+usa um **host diferente** (`homolog.oficina-mvp.local` / `prod.oficina-mvp.local`, substituído em
+`k8s/ingress.yaml` pelo pipeline) para o Kong conseguir rotear sem colisão — sem um domínio real configurado
+ainda, testar apontando o `Host` da requisição manualmente:
+
+```bash
+curl -H "Host: homolog.oficina-mvp.local" http://<IP-do-LoadBalancer-do-Kong>/api/health
+```
+
 ## Como rodar localmente
 
 ### 1. Pré-requisitos
 
-- Java 25.
+- Java 21+ (JDK 25 também funciona — `release=21` no `pom.xml` cross-compila; é o que o Dockerfile usa).
 - Maven.
 - Docker e Docker Compose, caso queira subir o PostgreSQL localmente via container.
 
@@ -943,6 +961,12 @@ A documentação interativa da API é gerada via **Swagger/OpenAPI** (springdoc)
 Swagger UI (local): http://localhost:3000/swagger-ui.html
 OpenAPI JSON (local): http://localhost:3000/v3/api-docs
 ```
+
+Também há uma **collection Postman** em [`docs/pilot-collection.postman_collection.json`](docs/pilot-collection.postman_collection.json)
+(ver também [`docs/pilot-script.md`](docs/pilot-script.md) para o roteiro de uso).
+
+**Ambiente publicado**: _(preencher com a URL pública real assim que o deploy em `homolog`/`prod` estiver de
+pé via Kong — ver `POST-TECH/FASE-3/plans/02-infra-k8s-ajustes.md` e `plans/04-app-java-fase3.md`)_.
 
 ## Documentação complementar
 
