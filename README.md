@@ -182,7 +182,8 @@ flowchart LR
         ECR[("Amazon ECR<br/>oficina-mecnica-lab")]
         subgraph EKS["Amazon EKS Cluster"]
             KONGLB["Service kong-proxy<br/>(LoadBalancer, namespace kong)"]
-            ING["Ingress oficina-app-ingress<br/>(ingressClassName: kong)"]
+            ING["Ingress oficina-app-ingress<br/>(rotas gerais)"]
+            ING_PUB["Ingress oficina-app-public-ingress<br/>(/api/public/service-orders/**,<br/>plugin jwt - ADR-006)"]
             SVC["Service oficina-app-service<br/>(ClusterIP)"]
             HPA{{"HPA oficina-app-hpa<br/>1–5 réplicas · CPU 20%"}}
             subgraph Pods["Deployment oficina-app-deployment"]
@@ -198,8 +199,10 @@ flowchart LR
     end
 
     INTERNET(("Internet")) --> KONGLB
-    KONGLB -->|"rotas do Ingress"| ING
+    KONGLB -->|"rotas gerais"| ING
+    KONGLB -->|"rotas públicas de OS"| ING_PUB
     ING --> SVC
+    ING_PUB --> SVC
     SVC --> Pods
     HPA -. escala .-> Pods
     CM --> Pods
@@ -331,7 +334,8 @@ Os manifests ficam em [`/k8s`](k8s):
 | `banco.yaml`          | `Deployment banco-deployment` + `Service banco-service` (PostgreSQL)                             |
 | `app.yaml`            | `Deployment oficina-app-deployment` (com `resources.requests/limits`) + `Service` (ClusterIP)    |
 | `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (1 a 5 réplicas, CPU 20%)                               |
-| `ingress.yaml`        | `Ingress oficina-app-ingress` (`ingressClassName: kong`) — rota que o Kong usa pra encontrar o Service da app |
+| `ingress.yaml`        | `Ingress oficina-app-ingress` (`ingressClassName: kong`) — rota geral que o Kong usa pra encontrar o Service da app |
+| `ingress-public.yaml` | `Ingress oficina-app-public-ingress` — só `/api/public/service-orders/**`, com o plugin `jwt` do Kong anexado (ADR-006) |
 
 > O `Service` da aplicação é `ClusterIP` — quem recebe tráfego externo é o `Service` do Kong (`kong-proxy`,
 > namespace `kong`), provisionado no repositório [`oficina-mvp-infra-iac`](https://github.com/lukebria/oficina-mvp-infra-iac).
@@ -499,12 +503,17 @@ Esse token **não é emitido por este backend** — é emitido por uma Function 
    confirmar que o cliente existe e está `ACTIVE` — resposta traz `status`: `ACTIVE`, `INACTIVE` ou `NOT_FOUND`
    (quando o documento não corresponde a nenhum cliente);
 3. assina um JWT com `CUSTOMER_JWT_SECRET` (segredo dedicado, diferente do `JWT_SECRET` administrativo), claims
-   `sub` = documento normalizado (só dígitos) e `role` = `"CUSTOMER"`.
+   `sub` = documento normalizado (só dígitos), `role` = `"CUSTOMER"` e `iss` (identifica o consumer no Kong).
 
 O documento do cliente autenticado vem sempre do token (nunca de um parâmetro de request) — por isso o token só
 permite consultar/aprovar a OS do próprio CPF, mesmo que o cliente tente informar outro código. Além disso,
 `JwtAuthenticationFilter` revalida o status do cliente **a cada request**: se o cliente for marcado `INACTIVE`
 depois de o token ter sido emitido, esse token para de autenticar imediatamente, sem esperar expirar.
+
+**Validação em duas camadas (ADR-006)**: essas duas rotas ficam atrás de um `Ingress` dedicado
+(`k8s/ingress-public.yaml`) com o plugin `jwt` do Kong — o Kong já rejeita (`401`) um token com assinatura
+inválida ou expirado antes da requisição chegar aqui. A aplicação **continua validando o token normalmente**
+(nada mudou em `JwtAuthenticationFilter`/`JwtService`) — é defesa em profundidade, não substituição.
 
 ### Testando o fluxo público localmente (com a Function)
 

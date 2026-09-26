@@ -318,22 +318,28 @@ permite usar `hasRole`/`hasAnyRole` em `SecurityConfig`.
 
 `GET /api/public/service-orders/{code}` e `POST /api/public/service-orders/{code}/approval` exigem
 `hasRole("CUSTOMER")`, satisfeito por um JWT **emitido fora deste backend**: uma Function Serverless em outro
-repositório, acionada por trás de um API Gateway (produto ainda em definição), que:
+repositório (`oficina-auth-function`), que:
 
 1. valida o CPF informado pelo cliente (`DocumentValidator`, mesma regra usada aqui);
 2. consulta `GET /api/internal/customers/{document}` (seção 5.4) para confirmar que o cliente existe e está `ACTIVE`;
 3. assina um JWT HS256 com `CUSTOMER_JWT_SECRET` — segredo **dedicado**, diferente de `JWT_SECRET`, para que o
    comprometimento de um ambiente externo (fora do nosso controle direto) não afete os tokens administrativos —
-   com claims `sub` = documento normalizado (só dígitos) e `role` = `"CUSTOMER"`.
+   com claims `sub` = documento normalizado (só dígitos), `role` = `"CUSTOMER"` e `iss` (identifica o
+   `KongConsumer` usado na validação do próximo parágrafo).
 
+**Validação em duas camadas (ADR-006)**: o **Kong** (API Gateway da aplicação, `oficina-mvp-infra-iac`) valida a
+assinatura e a expiração desse token via o plugin nativo `jwt` **antes** de rotear a requisição para este
+backend — só nas rotas `/api/public/service-orders/**` (`Ingress` dedicado,
+`konghq.com/plugins: customer-jwt-auth`). Isso é adicional, não substitui a validação da aplicação:
 `JwtAuthenticationFilter` tenta primeiro `JwtService.parse` (chave administrativa); se a assinatura não bater
-(`SignatureException`), tenta `JwtService.parseCustomer` (chave de cliente). Quando esse segundo parse é bem
-sucedido e o `role` claim é `CUSTOMER`, o filtro ainda confere, via `CustomerRepositoryPort.findByDocument`, que o
-documento existe **e** que `Customer.status == CustomerStatus.ACTIVE` antes de autenticar — mesma postura de
-revalidação contra o banco que já existe para o token administrativo (`UserRepositoryPort.findById`). Essa
-revalidação acontece a cada request, não só no momento em que a Function externa emitiu o token: um cliente
-marcado `INACTIVE` depois de já ter um token válido em mãos perde acesso imediatamente, sem esperar o token
-expirar. O principal da autenticação passa a ser o próprio documento.
+(`SignatureException`), tenta `JwtService.parseCustomer` (chave de cliente) — **inalterado**. Quando esse segundo
+parse é bem sucedido e o `role` claim é `CUSTOMER`, o filtro ainda confere, via
+`CustomerRepositoryPort.findByDocument`, que o documento existe **e** que `Customer.status ==
+CustomerStatus.ACTIVE` antes de autenticar — mesma postura de revalidação contra o banco que já existe para o
+token administrativo (`UserRepositoryPort.findById`). Essa revalidação acontece a cada request, não só no
+momento em que a Function externa emitiu o token: um cliente marcado `INACTIVE` depois de já ter um token válido
+em mãos perde acesso imediatamente, sem esperar o token expirar. O principal da autenticação passa a ser o
+próprio documento.
 
 `PublicServiceOrderController` lê esse documento sempre de `SecurityContextHolder` (nunca de um parâmetro de
 request) e passa para `ServiceOrderService.findByCode`/`.decideApprovalByCustomer` — cuja assinatura não mudou; só
@@ -919,7 +925,7 @@ flowchart TB
         end
 
         subgraph EKS["Cluster EKS — oficina-mvp-infra-iac (repo 2/4)"]
-            Kong["Kong API Gateway<br/>(Ingress Controller, DB-less)"]
+            Kong["Kong API Gateway<br/>(Ingress Controller, DB-less,<br/>plugin jwt valida token de cliente)"]
             subgraph NsHomolog["namespace: homolog"]
                 AppHomolog["oficina-mvp-java-backend<br/>(repo 4/4)"]
             end
@@ -964,6 +970,9 @@ Pontos que este diagrama deixa explícitos e que não apareciam nos diagramas fr
   AWS ainda pendentes de configuração nos GitHub Secrets.
 - **New Relic** representado como planejado (linhas pontilhadas) — a instrumentação de fato ainda não existe em
   nenhum dos 4 repositórios (maior gap do projeto, ver `plans/05-observabilidade-new-relic.md`).
+- **Validação do JWT de cliente em duas camadas** (ADR-006): o Kong valida assinatura/expiração via plugin
+  nativo antes de rotear; a aplicação continua validando e revalidando o status do cliente no banco — nenhuma
+  das duas camadas foi removida, é defesa em profundidade.
 
 ## 15. Diagramas de Sequência — Autenticação via CPF e Abertura de Ordem de Serviço
 
@@ -996,7 +1005,7 @@ sequenceDiagram
     App-->>Kong: 200 {found, customerId, status} | 404
     Kong-->>Lambda: resposta
     alt status = ACTIVE
-        Lambda->>Lambda: assina JWT HS256 (CUSTOMER_JWT_SECRET,<br/>sub=documento, role=CUSTOMER)
+        Lambda->>Lambda: assina JWT HS256 (CUSTOMER_JWT_SECRET,<br/>sub=documento, role=CUSTOMER, iss=customer-app)
         Lambda-->>Cliente: 200 {"token": "..."}
     else status = INACTIVE
         Lambda-->>Cliente: 403 (sem assinar token)
@@ -1005,8 +1014,12 @@ sequenceDiagram
     end
 
     Cliente->>Kong: GET /api/public/service-orders/{code}<br/>Authorization: Bearer token-cliente
-    Kong->>App: encaminha
-    App->>App: JwtAuthenticationFilter.parseCustomer<br/>(chave CUSTOMER_JWT_SECRET)
+    Kong->>Kong: plugin jwt: valida assinatura + expiração<br/>(ADR-006, consumer casado pelo claim iss)
+    alt token inválido/expirado
+        Kong-->>Cliente: 401 (nem chega na aplicação)
+    end
+    Kong->>App: encaminha (só se o Kong validar)
+    App->>App: JwtAuthenticationFilter.parseCustomer<br/>(chave CUSTOMER_JWT_SECRET, valida de novo)
     App->>DB: findByDocument (revalida status a cada request)
     DB-->>App: Customer ACTIVE
     App->>App: confere se documento é dono da OS {code}
@@ -1016,7 +1029,8 @@ sequenceDiagram
 
 Reflete fielmente `docs/architecture.md` seção 5.3 (`JwtAuthenticationFilter` tenta a chave administrativa
 primeiro, depois a de cliente; revalida `Customer.status` a cada request, não só no momento da emissão do
-token) e o contrato documentado no README de `oficina-auth-function`.
+token) e o contrato documentado no README de `oficina-auth-function`. A validação em duas camadas (Kong +
+aplicação) é a decisão registrada em ADR-006.
 
 ### 15.2 Abertura de ordem de serviço
 
@@ -1215,3 +1229,4 @@ Documentos formais de decisão técnica/arquitetural, exigidos pelo enunciado do
 | [ADR-003](architecture/adrs/ADR-003-kong-api-gateway.md) | Kong como API Gateway da aplicação principal |
 | [ADR-004](architecture/adrs/ADR-004-namespaces-homolog-prod.md) | Namespaces homolog/prod no mesmo cluster |
 | [ADR-005](architecture/adrs/ADR-005-terraform-state-s3-dynamodb.md) | Backend do Terraform state: S3 + DynamoDB |
+| [ADR-006](architecture/adrs/ADR-006-kong-jwt-validation.md) | Validação do JWT de cliente no API Gateway (Kong), em complemento à aplicação |

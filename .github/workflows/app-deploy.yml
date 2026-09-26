@@ -205,9 +205,11 @@ jobs:
           # 2. Substitui o placeholder da Imagem Docker no app.yaml
           sed -i "s|\${ECR_REPOSITORY_URL}|$ECR_REGISTRY/$ECR_REPOSITORY|g" k8s/app.yaml
 
-          # 3. Substitui o host do Ingress (diferencia homolog/prod no mesmo Kong)
+          # 3. Substitui o host do Ingress (diferencia homolog/prod no mesmo Kong) nos dois manifestos de Ingress
           envsubst '${INGRESS_HOST}' < k8s/ingress.yaml > k8s/ingress.tmp.yaml
           mv k8s/ingress.tmp.yaml k8s/ingress.yaml
+          envsubst '${INGRESS_HOST}' < k8s/ingress-public.yaml > k8s/ingress-public.tmp.yaml
+          mv k8s/ingress-public.tmp.yaml k8s/ingress-public.yaml
 
           # 4. Aplica os manifestos no namespace de destino (homolog ou prod)
           kubectl apply -n "$NAMESPACE" -f k8s/config-secret.yaml
@@ -215,3 +217,4 @@ jobs:
           kubectl apply -n "$NAMESPACE" -f k8s/app.yaml
           kubectl apply -n "$NAMESPACE" -f k8s/hpa.yaml
           kubectl apply -n "$NAMESPACE" -f k8s/ingress.yaml
+          kubectl apply -n "$NAMESPACE" -f k8s/ingress-public.yaml
