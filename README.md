@@ -994,7 +994,15 @@ Mapeamento da implementação Java/Spring atual.
 docs/MER.drawio
 ```
 
-Modelo entidade-relacionamento visual do banco.
+Modelo entidade-relacionamento visual do banco (versão textual/atualizada em `docs/architecture.md`, seção 16.2).
+
+```txt
+docs/architecture/rfcs/  e  docs/architecture/adrs/
+```
+
+RFCs (escolha da nuvem, do banco, estratégia de autenticação) e ADRs (comunicação síncrona Lambda↔backend, HPA
+sem autoscaling de nós, Kong como API Gateway, namespaces homolog/prod, backend do Terraform state) — índice
+completo em `docs/architecture.md`, seção 17.
 
 [github.com/lukebria/oficina-auth-function](https://github.com/lukebria/oficina-auth-function)
 

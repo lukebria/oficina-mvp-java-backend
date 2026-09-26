@@ -65,7 +65,7 @@ A stack está definida principalmente no `pom.xml`, nos arquivos `.yml`, no `Doc
 
 | Item                   | Tecnologia/versão             | Onde aparece                                                     |
 |------------------------|--------------------------------|-------------------------------------------------------------------|
-| Linguagem              | Java 25                       | `pom.xml`, `Dockerfile`                                          |
+| Linguagem              | Java 21 (build); Dockerfile usa imagens Java 25 | `pom.xml` (`java.version`/`release=21`), `Dockerfile` |
 | Framework              | Spring Boot 4.0.6             | `pom.xml`                                                        |
 | Build                  | Maven                         | `pom.xml`, `Dockerfile`                                          |
 | API HTTP               | Spring WebMVC                 | `spring-boot-starter-webmvc`                                     |
@@ -898,3 +898,320 @@ sequenceDiagram
 | 13.2     | Desenho principal de componentes (boxes + setas)  |
 | 13.3     | Explicar hexagonal e onboarding de dev            |
 | 13.4     | Detalhar o caminho de uma request em um módulo    |
+
+## 14. Diagrama de Componentes — visão de nuvem completa
+
+Os diagramas da seção 13 cobrem só o processo Spring Boot. Este cobre o desenho de nuvem completo exigido pelo
+Tech Challenge Fase 3: os 4 repositórios, os 2 API Gateways distintos, o banco gerenciado e a observabilidade
+(New Relic — ver `POST-TECH/FASE-3/plans/05-observabilidade-new-relic.md`; instrumentação ainda não implementada
+no momento em que este diagrama foi escrito, 2026-09-26).
+
+```mermaid
+flowchart TB
+    Staff(["Equipe da oficina"])
+    Cliente(["Cliente"])
+
+    subgraph AWS["AWS — conta AWS Academy Learner Lab (us-east-1)"]
+        subgraph LambdaBox["oficina-auth-function (repo 1/4)"]
+            ApiGwLambda["AWS API Gateway<br/>(HTTP API v2)"]
+            Lambda["Lambda: authenticateHandler<br/>valida CPF -> consulta status -> assina JWT"]
+            ApiGwLambda --> Lambda
+        end
+
+        subgraph EKS["Cluster EKS — oficina-mvp-infra-iac (repo 2/4)"]
+            Kong["Kong API Gateway<br/>(Ingress Controller, DB-less)"]
+            subgraph NsHomolog["namespace: homolog"]
+                AppHomolog["oficina-mvp-java-backend<br/>(repo 4/4)"]
+            end
+            subgraph NsProd["namespace: prod"]
+                AppProd["oficina-mvp-java-backend<br/>(repo 4/4)"]
+            end
+            Kong --> AppHomolog
+            Kong --> AppProd
+        end
+
+        RDS[("Amazon RDS PostgreSQL<br/>oficina-mvp-infra-db (repo 3/4)")]
+        ECR["Amazon ECR"]
+        NewRelic["New Relic<br/>(APM + Infra K8s + Logs — planejado)"]
+
+        AppHomolog --> RDS
+        AppProd --> RDS
+        Lambda -->|"GET /api/internal/customers/{document}<br/>X-Internal-Api-Key"| Kong
+        ECR -.->|"imagem"| AppHomolog
+        ECR -.->|"imagem"| AppProd
+    end
+
+    Staff -->|"JWT administrativo"| Kong
+    Cliente -->|"1: POST /authenticate {CPF}"| ApiGwLambda
+    Cliente -->|"3: rotas protegidas<br/>Authorization: Bearer token-cliente"| Kong
+    Lambda -.->|"2: JWT do cliente"| Cliente
+
+    AppHomolog -.->|APM/logs| NewRelic
+    AppProd -.->|APM/logs| NewRelic
+    EKS -.->|infra metrics| NewRelic
+    Lambda -.->|extension| NewRelic
+```
+
+Pontos que este diagrama deixa explícitos e que não apareciam nos diagramas fragmentados de cada repositório:
+
+- **Dois API Gateways distintos** — decisão registrada em ADR-003: Kong para a aplicação principal (dentro do
+  cluster, sem custo de serviço gerenciado adicional) e AWS API Gateway HTTP API para a Lambda (já existia antes
+  da decisão do Kong, mantido por não haver motivo para trocar).
+- **Namespaces `homolog`/`prod`** compartilhando o mesmo cluster/Kong (ADR-004), diferenciados por `host` no
+  `Ingress` (ver `oficina-mvp-java-backend/k8s/ingress.yaml`).
+- **RDS ainda não aplicado** no momento em que este diagrama foi escrito — `oficina-mvp-infra-db` tem o
+  Terraform pronto (ver `POST-TECH/FASE-3/plans/01-infra-db-novo-repo.md`), mas o `apply` depende de credenciais
+  AWS ainda pendentes de configuração nos GitHub Secrets.
+- **New Relic** representado como planejado (linhas pontilhadas) — a instrumentação de fato ainda não existe em
+  nenhum dos 4 repositórios (maior gap do projeto, ver `plans/05-observabilidade-new-relic.md`).
+
+## 15. Diagramas de Sequência — Autenticação via CPF e Abertura de Ordem de Serviço
+
+Os dois fluxos pedidos nominalmente pelo enunciado do Tech Challenge (o diagrama genérico de CRUD da seção 13.4
+continua válido como exemplo do padrão hexagonal, mas não cobre estes dois fluxos específicos).
+
+### 15.1 Autenticação via CPF (cliente → Lambda → backend → Lambda → cliente)
+
+```mermaid
+sequenceDiagram
+    actor Cliente
+    participant Kong as Kong (API Gateway)
+    participant App as oficina-mvp-java-backend
+    participant ApiGw as AWS API Gateway
+    participant Lambda as oficina-auth-function
+    participant DB as PostgreSQL
+
+    Cliente->>Kong: GET /api/public/service-orders/{code}<br/>(sem token)
+    Kong->>App: encaminha
+    App-->>Kong: 401 Unauthorized
+    Kong-->>Cliente: 401 Unauthorized
+
+    Cliente->>ApiGw: POST /authenticate {"document": "CPF"}
+    ApiGw->>Lambda: invoke (APIGatewayProxyEvent)
+    Lambda->>Lambda: valida CPF/CNPJ (documentValidator)
+    Lambda->>Kong: GET /api/internal/customers/{document}<br/>X-Internal-Api-Key
+    Kong->>App: encaminha (InternalApiKeyAuthenticationFilter)
+    App->>DB: findByDocument
+    DB-->>App: Customer (status ACTIVE/INACTIVE) | não encontrado
+    App-->>Kong: 200 {found, customerId, status} | 404
+    Kong-->>Lambda: resposta
+    alt status = ACTIVE
+        Lambda->>Lambda: assina JWT HS256 (CUSTOMER_JWT_SECRET,<br/>sub=documento, role=CUSTOMER)
+        Lambda-->>Cliente: 200 {"token": "..."}
+    else status = INACTIVE
+        Lambda-->>Cliente: 403 (sem assinar token)
+    else não encontrado
+        Lambda-->>Cliente: 404
+    end
+
+    Cliente->>Kong: GET /api/public/service-orders/{code}<br/>Authorization: Bearer token-cliente
+    Kong->>App: encaminha
+    App->>App: JwtAuthenticationFilter.parseCustomer<br/>(chave CUSTOMER_JWT_SECRET)
+    App->>DB: findByDocument (revalida status a cada request)
+    DB-->>App: Customer ACTIVE
+    App->>App: confere se documento é dono da OS {code}
+    App-->>Kong: 200 (visão pública da OS)
+    Kong-->>Cliente: 200
+```
+
+Reflete fielmente `docs/architecture.md` seção 5.3 (`JwtAuthenticationFilter` tenta a chave administrativa
+primeiro, depois a de cliente; revalida `Customer.status` a cada request, não só no momento da emissão do
+token) e o contrato documentado no README de `oficina-auth-function`.
+
+### 15.2 Abertura de ordem de serviço
+
+```mermaid
+sequenceDiagram
+    actor Staff as Equipe da oficina
+    participant Ctrl as ServiceOrderController
+    participant Svc as ServiceOrderService
+    participant CustPort as CustomerRepositoryPort
+    participant VehPort as VehicleRepositoryPort
+    participant CatPort as CatalogRepositoryPort
+    participant PartPort as PartRepositoryPort
+    participant SOPort as ServiceOrderRepositoryPort
+    participant Mail as ServiceOrderNotificationPort
+
+    Staff->>Ctrl: POST /api/service-orders (JWT ADMIN/MECHANIC/ATTENDANT)
+    Ctrl->>Svc: create(CreateServiceOrderCommand)
+    Svc->>Svc: normaliza/valida CPF e placa
+    Svc->>CustPort: findByDocument ou cria cliente
+    CustPort-->>Svc: Customer
+    Svc->>VehPort: findByPlate ou cria veículo
+    VehPort-->>Svc: Vehicle
+    Svc->>Svc: gera código único (generateUniqueOrderCode,<br/>até 5 tentativas)
+    Svc->>Svc: cria ServiceOrder (status RECEBIDA)
+    Svc->>CatPort: busca serviços ativos do catálogo
+    CatPort-->>Svc: ServiceCatalogItem[]
+    Svc->>Svc: adiciona WorkOrderService (preço congelado)
+    opt peças informadas
+        Svc->>PartPort: busca peças ativas
+        PartPort-->>Svc: Part[]
+        Svc->>Svc: adiciona WorkOrderPart (preço congelado)
+    end
+    Svc->>Svc: calcula totalServices, totalParts, totalAmount
+    Svc->>Svc: transição RECEBIDA -> AGUARDANDO_APROVACAO<br/>(ServiceOrderStatusPolicy)
+    Svc->>Svc: registra histórico (recebida + orçamento enviado)
+    Svc->>SOPort: save (OS + itens + histórico, cascade)
+    SOPort-->>Svc: ServiceOrder persistida
+    Svc->>Mail: notifyStatusChanged (AGUARDANDO_APROVACAO)
+    Mail-->>Svc: (e-mail enviado ou logado se falhar — não bloqueia)
+    Svc-->>Ctrl: ServiceOrder
+    Ctrl-->>Staff: 201 ServiceOrderResponseDto
+```
+
+Reflete fielmente `docs/architecture.md` seção 7.2 (fluxo real de `ServiceOrderService.create`) — preços de
+serviços/peças são copiados no momento da criação (`WorkOrderService`/`WorkOrderPart`), então mudanças
+posteriores no catálogo não alteram um orçamento já gerado.
+
+## 16. Justificativa formal do banco de dados e modelo relacional
+
+### 16.1 Por que PostgreSQL
+
+- **Já em uso e validado**: a aplicação já usa PostgreSQL via Spring Data JPA/Hibernate + Flyway desde antes da
+  Fase 3 — trocar de motor não traria benefício que justificasse o custo de migração e reescrita de queries
+  nativas/tipos específicos.
+- **Modelo fortemente relacional**: o domínio (`customers` → `vehicles` → `service_orders` → itens/histórico)
+  tem relacionamentos 1:N bem definidos, com integridade referencial (`FOREIGN KEY`, `ON DELETE CASCADE`) e
+  regras de consistência (`CHECK` de status/role) que um banco relacional expressa nativamente — um documento
+  NoSQL exigiria duplicar/desnormalizar dados ou implementar essas garantias na aplicação.
+- **Transações ACID para operações críticas**: decremento de estoque de peças (`Part.decrementStock`) e cálculo
+  de totais da OS precisam ser atômicos com a criação dos itens — inconsistência aqui é um bug de negócio (peça
+  vendida sem baixar estoque, ou orçamento com total divergente da soma dos itens).
+- **Ecossistema gerenciado maduro e barato**: Amazon RDS PostgreSQL é o serviço gerenciado mais barato entre as
+  opções avaliadas nesta nuvem para o volume de um projeto de estudo (ver RFC-002 para o comparativo completo).
+
+### 16.2 Diagrama ER (reflete o schema real, `V1__init.sql` + `V2`/`V3`)
+
+```mermaid
+erDiagram
+    USERS {
+        bigint id PK
+        varchar name
+        varchar email UK
+        varchar password_hash
+        varchar role "CHECK: ADMIN, ATTENDANT, MECHANIC"
+    }
+    CUSTOMERS {
+        bigint id PK
+        varchar name
+        varchar document UK
+        varchar email
+        varchar phone
+        varchar status "CHECK: ACTIVE, INACTIVE (V3)"
+    }
+    VEHICLES {
+        bigint id PK
+        bigint customer_id FK
+        varchar plate UK
+        varchar brand
+        varchar model
+        int manufacturing_year
+    }
+    SERVICE_CATALOG_ITEMS {
+        bigint id PK
+        varchar name UK
+        text description
+        numeric base_price
+        int estimated_minutes
+        boolean active
+    }
+    PARTS {
+        bigint id PK
+        varchar name
+        varchar sku UK
+        numeric unit_price
+        int stock_quantity
+        int min_stock
+        boolean active
+    }
+    SERVICE_ORDERS {
+        bigint id PK
+        varchar code UK
+        bigint customer_id FK
+        bigint vehicle_id FK
+        varchar status "CHECK: 7 valores (V1+V2, inclui RECUSADA)"
+        text diagnosis
+        numeric total_services
+        numeric total_parts
+        numeric total_amount
+        timestamptz approved_at
+        timestamptz started_at
+        timestamptz finalized_at
+        timestamptz delivered_at
+    }
+    WORK_ORDER_SERVICES {
+        bigint id PK
+        bigint service_order_id FK
+        bigint service_item_id FK
+        int quantity
+        numeric unit_price "preço congelado no momento da criação"
+        numeric total_price
+    }
+    WORK_ORDER_PARTS {
+        bigint id PK
+        bigint service_order_id FK
+        bigint part_id FK
+        int quantity
+        numeric unit_price "preço congelado no momento da criação"
+        numeric total_price
+    }
+    SERVICE_ORDER_STATUS_HISTORY {
+        bigint id PK
+        bigint service_order_id FK
+        varchar status
+        text comment
+        timestamptz changed_at
+    }
+
+    CUSTOMERS ||--o{ VEHICLES : "1:N, ON DELETE CASCADE"
+    CUSTOMERS ||--o{ SERVICE_ORDERS : "1:N"
+    VEHICLES ||--o{ SERVICE_ORDERS : "1:N"
+    SERVICE_ORDERS ||--o{ WORK_ORDER_SERVICES : "1:N, ON DELETE CASCADE"
+    SERVICE_CATALOG_ITEMS ||--o{ WORK_ORDER_SERVICES : "1:N"
+    SERVICE_ORDERS ||--o{ WORK_ORDER_PARTS : "1:N, ON DELETE CASCADE"
+    PARTS ||--o{ WORK_ORDER_PARTS : "1:N"
+    SERVICE_ORDERS ||--o{ SERVICE_ORDER_STATUS_HISTORY : "1:N, ON DELETE CASCADE"
+```
+
+> `docs/MER.drawio` continua válido como versão visual/editável do mesmo schema — este diagrama Mermaid é a
+> versão textual, sempre sincronizável com o Git, usada como referência formal deste documento.
+
+### 16.3 Ajustes já feitos no modelo relacional (consistência/performance)
+
+O enunciado pede "ajustes no modelo relacional, com diagramas ER e explicação dos relacionamentos" — os ajustes
+concretos já aplicados via Flyway, depois do schema inicial (`V1`):
+
+- **`V2__add_recusada_status.sql`**: recria os `CHECK` de `service_orders.status` e
+  `service_order_status_history.status` para incluir `RECUSADA` — o schema inicial não previa esse status,
+  descoberto como necessário durante a implementação da decisão administrativa/pública sobre o orçamento
+  (seção 7.3/7.4).
+- **`V3__add_customer_status.sql`**: adiciona `customers.status` (`ACTIVE`/`INACTIVE`, default `ACTIVE`) com
+  `CHECK` — suporte direto ao requisito da Fase 3 de bloquear autenticação via CPF para clientes inativos
+  (seção 5.3).
+- **Índices de performance** já presentes desde `V1`: `idx_vehicles_customer_id`,
+  `idx_service_orders_customer_id`/`_vehicle_id`/`_status`, `idx_work_order_services_order_id`/`_item_id`,
+  `idx_work_order_parts_order_id`/`_part_id`, `idx_service_order_status_history_order_id` — cobrem os padrões de
+  consulta reais (listagem de OS por cliente/veículo/status, itens por OS).
+
+## 17. RFCs e ADRs
+
+Documentos formais de decisão técnica/arquitetural, exigidos pelo enunciado do Tech Challenge Fase 3.
+
+**RFCs** (decisões técnicas relevantes — `docs/architecture/rfcs/`):
+
+| RFC | Título |
+|---|---|
+| [RFC-001](architecture/rfcs/RFC-001-cloud-provider.md) | Escolha da nuvem |
+| [RFC-002](architecture/rfcs/RFC-002-database-choice.md) | Escolha do banco de dados |
+| [RFC-003](architecture/rfcs/RFC-003-authentication-strategy.md) | Estratégia de autenticação |
+
+**ADRs** (decisões arquiteturais permanentes — `docs/architecture/adrs/`):
+
+| ADR | Título |
+|---|---|
+| [ADR-001](architecture/adrs/ADR-001-sync-http-lambda-backend.md) | Comunicação síncrona HTTP entre a Lambda e o backend |
+| [ADR-002](architecture/adrs/ADR-002-hpa-only-no-node-autoscaling.md) | Somente HPA de pods, sem autoscaling de nós |
+| [ADR-003](architecture/adrs/ADR-003-kong-api-gateway.md) | Kong como API Gateway da aplicação principal |
+| [ADR-004](architecture/adrs/ADR-004-namespaces-homolog-prod.md) | Namespaces homolog/prod no mesmo cluster |
+| [ADR-005](architecture/adrs/ADR-005-terraform-state-s3-dynamodb.md) | Backend do Terraform state: S3 + DynamoDB |
