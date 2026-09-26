@@ -13,6 +13,7 @@ import br.com.oficina.mvp.serviceorder.application.port.out.ServiceOrderReposito
 import br.com.oficina.mvp.serviceorder.domain.ServiceOrder;
 import br.com.oficina.mvp.serviceorder.domain.WorkOrderPart;
 import br.com.oficina.mvp.shared.exception.BusinessException;
+import br.com.oficina.mvp.shared.observability.BusinessMetrics;
 import br.com.oficina.mvp.vehicle.application.port.out.VehicleRepositoryPort;
 import br.com.oficina.mvp.vehicle.domain.Vehicle;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,12 +26,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -51,6 +54,8 @@ class ServiceOrderServiceTest {
     PartRepositoryPort parts;
     @Mock
     ServiceOrderNotificationPort notifications;
+    @Mock
+    BusinessMetrics metrics;
 
     @InjectMocks
     ServiceOrderService service;
@@ -125,6 +130,8 @@ class ServiceOrderServiceTest {
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.AGUARDANDO_APROVACAO);
         assertThat(result.getCode()).startsWith("OS-");
         verify(notifications, times(1)).notifyStatusChanged(result);
+        verify(metrics, times(1)).recordServiceOrderCreated();
+        verify(metrics).recordServiceOrderStatusDuration(eq(ServiceOrderStatus.RECEBIDA), any(Duration.class));
     }
 
     @Test
@@ -220,6 +227,7 @@ class ServiceOrderServiceTest {
         assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.EM_EXECUCAO);
         assertThat(part.getStockQuantity()).isEqualTo(8);
         verify(notifications, times(1)).notifyStatusChanged(result);
+        verify(metrics).recordServiceOrderStatusDuration(eq(ServiceOrderStatus.AGUARDANDO_APROVACAO), any(Duration.class));
     }
 
     @Test

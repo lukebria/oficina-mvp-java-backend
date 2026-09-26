@@ -70,6 +70,20 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- Observabilidade (Fase 3): tracing distribuído + exportação OTLP (New Relic aceita OTLP nativamente).
+             Sampling fica em 0% por padrão (ver application.yml) - inerte até TRACING_SAMPLING_PROBABILITY e
+             NEW_RELIC_OTLP_ENDPOINT/NEW_RELIC_LICENSE_KEY serem configurados. Ver
+             POST-TECH/FASE-3/plans/05-observabilidade-new-relic.md. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
