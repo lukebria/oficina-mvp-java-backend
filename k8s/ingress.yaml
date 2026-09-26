@@ -9,6 +9,9 @@ spec:
     # ${INGRESS_HOST} é substituído pelo pipeline (homolog.oficina-mvp.local / prod.oficina-mvp.local)
     # conforme o namespace de destino - necessário porque os dois ambientes rodam no mesmo cluster/Kong
     # e um Ingress sem host, em path "/", colidiria entre namespaces diferentes.
+    #
+    # Este Ingress cobre TUDO exceto /api/public/service-orders/** (rotas públicas de OS), que tem um Ingress
+    # próprio (ingress-public.yaml) com o plugin JWT do Kong (ADR-006) - o Kong prioriza o path mais específico.
     - host: ${INGRESS_HOST}
       http:
         paths:

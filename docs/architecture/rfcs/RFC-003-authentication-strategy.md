@@ -41,6 +41,14 @@ com um segredo dedicado (`CUSTOMER_JWT_SECRET`, diferente do `JWT_SECRET` admini
   perde acesso imediatamente — sem essa revalidação, o desenho seria mais fraco independente de qual opção de
   arquitetura fosse escolhida.
 
+## Atualização (2026-09-26) — validação do token também no API Gateway
+
+Depois deste RFC ter sido escrito, o professor da disciplina esclareceu que a validação do token nas rotas
+protegidas **pode ser feita pelo API Gateway**. Isso não muda a decisão acima (a estratégia de emissão do token
+continua a mesma), mas adiciona uma camada: o Kong agora também valida a assinatura/expiração do token antes de
+rotear para o backend, em complemento à validação que a aplicação já fazia. Decisão registrada separadamente em
+ADR-006, por ser uma decisão sobre *onde validar*, não sobre *como emitir*.
+
 ## Consequências
 
 - **Acoplamento por contrato HTTP, não por schema**: qualquer mudança nos campos do endpoint interno
