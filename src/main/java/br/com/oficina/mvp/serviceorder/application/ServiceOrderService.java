@@ -15,6 +15,7 @@ import br.com.oficina.mvp.serviceorder.domain.ServiceOrder;
 import br.com.oficina.mvp.serviceorder.domain.WorkOrderPart;
 import br.com.oficina.mvp.serviceorder.domain.WorkOrderService;
 import br.com.oficina.mvp.shared.exception.BusinessException;
+import br.com.oficina.mvp.shared.observability.BusinessMetrics;
 import br.com.oficina.mvp.shared.validation.DocumentValidator;
 import br.com.oficina.mvp.shared.validation.PlateValidator;
 import br.com.oficina.mvp.vehicle.application.port.out.VehicleRepositoryPort;
@@ -23,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -39,6 +41,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
     private final CatalogRepositoryPort catalog;
     private final PartRepositoryPort parts;
     private final ServiceOrderNotificationPort notifications;
+    private final BusinessMetrics metrics;
 
     public ServiceOrderService(
             ServiceOrderRepositoryPort serviceOrders,
@@ -46,7 +49,8 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
             VehicleRepositoryPort vehicles,
             CatalogRepositoryPort catalog,
             PartRepositoryPort parts,
-            ServiceOrderNotificationPort notifications
+            ServiceOrderNotificationPort notifications,
+            BusinessMetrics metrics
     ) {
         this.serviceOrders = serviceOrders;
         this.customers = customers;
@@ -54,6 +58,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
         this.catalog = catalog;
         this.parts = parts;
         this.notifications = notifications;
+        this.metrics = metrics;
     }
 
     @Override
@@ -83,6 +88,8 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
 
         order.markBudgetWaitingApproval();
         var saved = serviceOrders.save(order);
+        metrics.recordServiceOrderCreated();
+        recordPreviousStatusDuration(saved);
         notifications.notifyStatusChanged(saved);
         return saved;
     }
@@ -134,6 +141,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
         }
         order.decideApproval(approved, comment);
         serviceOrders.save(order);
+        recordPreviousStatusDuration(order);
         if (approved) {
             notifications.notifyStatusChanged(order);
         }
@@ -146,6 +154,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
         var order = findEntity(id);
         order.changeStatus(status, comment);
         serviceOrders.save(order);
+        recordPreviousStatusDuration(order);
         if (status != ServiceOrderStatus.RECUSADA) {
             notifications.notifyStatusChanged(order);
         }
@@ -193,12 +202,30 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
             decrementStock(order);
             order.decideApproval(true, comment == null ? "Orçamento aprovado pelo cliente. OS enviada para execução." : comment);
             serviceOrders.save(order);
+            recordPreviousStatusDuration(order);
             notifications.notifyStatusChanged(order);
         } else {
             order.decideApproval(false, comment == null ? "Orçamento recusado pelo cliente." : comment);
             serviceOrders.save(order);
+            recordPreviousStatusDuration(order);
         }
         return order;
+    }
+
+    /**
+     * Métrica de observabilidade (dashboard "tempo médio de execução por status"): calcula quanto tempo a OS
+     * ficou no status anterior, comparando as duas últimas entradas do histórico (a transição que acabou de
+     * acontecer sempre adiciona uma entrada nova). Não falha a operação de negócio se o histórico estiver vazio
+     * ou tiver só uma entrada (ex: primeira transição de uma OS recém-criada).
+     */
+    private void recordPreviousStatusDuration(ServiceOrder order) {
+        var history = order.getHistory();
+        if (history.size() < 2) {
+            return;
+        }
+        var previous = history.get(history.size() - 2);
+        var current = history.get(history.size() - 1);
+        metrics.recordServiceOrderStatusDuration(previous.getStatus(), Duration.between(previous.getChangedAt(), current.getChangedAt()));
     }
 
     private ServiceOrder findEntity(Long id) {
