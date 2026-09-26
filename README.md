@@ -179,7 +179,7 @@ flowchart LR
             KONGLB["Service kong-proxy<br/>(LoadBalancer, namespace kong)"]
             ING["Ingress oficina-app-ingress<br/>(ingressClassName: kong)"]
             SVC["Service oficina-app-service<br/>(ClusterIP)"]
-            HPA{{"HPA oficina-app-hpa<br/>2–5 réplicas · CPU 70%"}}
+            HPA{{"HPA oficina-app-hpa<br/>1–5 réplicas · CPU 20%"}}
             subgraph Pods["Deployment oficina-app-deployment"]
                 POD1["Pod app"]
                 POD2["Pod app"]
@@ -312,7 +312,7 @@ Os manifests ficam em [`/k8s`](k8s):
 | `config-secret.yaml`  | `ConfigMap app-config` + `Secret app-secrets` (credenciais de banco, JWT, admin seed e e-mail)   |
 | `banco.yaml`          | `Deployment banco-deployment` + `Service banco-service` (PostgreSQL)                             |
 | `app.yaml`            | `Deployment oficina-app-deployment` (com `resources.requests/limits`) + `Service` (ClusterIP)    |
-| `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (2 a 5 réplicas, CPU 70%)                               |
+| `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (1 a 5 réplicas, CPU 20%)                               |
 | `ingress.yaml`        | `Ingress oficina-app-ingress` (`ingressClassName: kong`) — rota que o Kong usa pra encontrar o Service da app |
 
 > O `Service` da aplicação é `ClusterIP` — quem recebe tráfego externo é o `Service` do Kong (`kong-proxy`,
