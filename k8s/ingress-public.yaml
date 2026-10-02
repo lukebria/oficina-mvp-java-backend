@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.28.0/ingress-networking-v1.json
+#
+# Ingress dedicado às rotas públicas de OS (fluxo de autenticação via CPF) - separado do Ingress geral
+# (oficina-app-ingress) só para poder anexar o plugin JWT do Kong (ADR-006) sem afetar as demais rotas
+# (administrativas, health, endpoint interno consumido pela Lambda), que continuam sem essa validação extra na
+# borda - a aplicação já autentica/autoriza essas rotas normalmente.
+#
+# O Kong resolve por especificidade de path: uma requisição em /api/public/service-orders/** casa com este
+# Ingress (mais específico) antes do Ingress geral (path "/"), então o plugin listado abaixo é aplicado.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oficina-app-public-ingress
+  annotations:
+    konghq.com/plugins: customer-jwt-auth
+spec:
+  ingressClassName: kong
+  rules:
+    - host: ${INGRESS_HOST}
+      http:
+        paths:
+          - path: /api/public/service-orders
+            pathType: Prefix
+            backend:
+              service:
+                name: oficina-app-service
+                port:
+                  number: 80

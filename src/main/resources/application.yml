@@ -37,6 +37,36 @@ management:
     web:
       exposure:
         include: health,info,metrics
+  # Observabilidade (Fase 3, plano 05) - tracing distribuído exportado via OTLP (New Relic aceita OTLP
+  # nativamente). Sampling em 0% por padrão: sem TRACING_SAMPLING_PROBABILITY configurado, nenhum trace é
+  # criado/exportado (nenhuma chamada de rede acontece) - fica pronto pra ligar assim que houver uma conta
+  # New Relic com License Key. Uma vez ativo, os logs (ver "logging" abaixo) e as métricas de negócio
+  # (BusinessMetrics) já ficam correlacionados por trace/span automaticamente.
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:0}
+  otlp:
+    tracing:
+      endpoint: ${NEW_RELIC_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+      headers:
+        api-key: ${NEW_RELIC_LICENSE_KEY:}
+    # Métricas de negócio (BusinessMetrics: service_order.created, service_order.status.duration,
+    # integration.failure) - registry separado do tracing acima. "enabled: false" por padrão é uma segunda
+    # trava de segurança (além do endpoint apontar pra localhost) - sem isso, nenhuma chamada de rede de
+    # métrica acontece, mesmo com o registry no classpath.
+    metrics:
+      export:
+        enabled: ${OTLP_METRICS_EXPORT_ENABLED:false}
+        url: ${NEW_RELIC_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
+        headers:
+          api-key: ${NEW_RELIC_LICENSE_KEY:}
+
+# Logging estruturado em JSON (Elastic Common Schema) - inclui trace.id/span.id automaticamente quando o
+# tracing acima estiver ativo, permitindo correlacionar logs entre requisições/serviços.
+logging:
+  structured:
+    format:
+      console: ecs
 
 springdoc:
   api-docs:

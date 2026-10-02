@@ -2,6 +2,7 @@ package br.com.oficina.mvp.serviceorder.adapter.out.notification;
 
 import br.com.oficina.mvp.serviceorder.application.port.out.ServiceOrderNotificationPort;
 import br.com.oficina.mvp.serviceorder.domain.ServiceOrder;
+import br.com.oficina.mvp.shared.observability.BusinessMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,10 +17,13 @@ class ServiceOrderStatusNotificationAdapter implements ServiceOrderNotificationP
 
     private final JavaMailSender mailSender;
     private final String fromAddress;
+    private final BusinessMetrics metrics;
 
-    ServiceOrderStatusNotificationAdapter(JavaMailSender mailSender, @Value("${app.mail.from}") String fromAddress) {
+    ServiceOrderStatusNotificationAdapter(JavaMailSender mailSender, @Value("${app.mail.from}") String fromAddress,
+                                           BusinessMetrics metrics) {
         this.mailSender = mailSender;
         this.fromAddress = fromAddress;
+        this.metrics = metrics;
     }
 
     @Override
@@ -34,6 +38,7 @@ class ServiceOrderStatusNotificationAdapter implements ServiceOrderNotificationP
             mailSender.send(buildMessage(order, email));
             log.info("Notificando cliente {} sobre OS {}: status alterado para {}.", email, order.getCode(), order.getStatus());
         } catch (MailException e) {
+            metrics.recordIntegrationFailure("email");
             log.error("Falha ao enviar e-mail de notificação da OS {} para {}.", order.getCode(), email, e);
         }
     }
