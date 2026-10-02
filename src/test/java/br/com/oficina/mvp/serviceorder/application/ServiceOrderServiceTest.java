@@ -11,6 +11,7 @@ import br.com.oficina.mvp.serviceorder.application.port.in.CreateServiceOrderCom
 import br.com.oficina.mvp.serviceorder.application.port.out.ServiceOrderNotificationPort;
 import br.com.oficina.mvp.serviceorder.application.port.out.ServiceOrderRepositoryPort;
 import br.com.oficina.mvp.serviceorder.domain.ServiceOrder;
+import br.com.oficina.mvp.serviceorder.domain.ServiceOrderStatusHistory;
 import br.com.oficina.mvp.serviceorder.domain.WorkOrderPart;
 import br.com.oficina.mvp.shared.exception.BusinessException;
 import br.com.oficina.mvp.shared.observability.BusinessMetrics;
@@ -19,6 +20,7 @@ import br.com.oficina.mvp.vehicle.domain.Vehicle;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -27,6 +29,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -444,6 +448,129 @@ class ServiceOrderServiceTest {
         assertThatThrownBy(() -> service.findById(99L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Ordem de serviço não encontrada");
+    }
+
+    @Test
+    void shouldFindById() {
+        var order = new ServiceOrder("OS-020", customer, vehicle, null);
+        when(serviceOrders.findById(1L)).thenReturn(Optional.of(order));
+
+        assertThat(service.findById(1L)).isSameAs(order);
+    }
+
+    @Test
+    void shouldThrowWhenUpdatingStatusForMissingOrder() {
+        when(serviceOrders.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateStatus(99L, ServiceOrderStatus.EM_DIAGNOSTICO, null))
+                .isInstanceOfSatisfying(BusinessException.class, ex ->
+                        assertThat(ex.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+        verify(serviceOrders, never()).save(any());
+    }
+
+    @Test
+    void shouldUpdateExistingCustomerAndVehicleDataOnCreate() {
+        when(customers.findByDocument("52998224725")).thenReturn(Optional.of(customer));
+        when(vehicles.findByPlate("ABC1234")).thenReturn(Optional.of(vehicle));
+        when(catalog.findById(1L)).thenReturn(Optional.of(catalogItem));
+        when(serviceOrders.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var command = new CreateServiceOrderCommand(
+                "529.982.247-25",
+                new CreateServiceOrderCommand.CustomerData("João Atualizado", "novo@email.com", "11888888888"),
+                new CreateServiceOrderCommand.VehicleData("ABC-1234", "VW", "Gol", 2022),
+                null,
+                List.of(new CreateServiceOrderCommand.ServiceItemData(1L, 1)),
+                null
+        );
+
+        var result = service.create(command);
+
+        assertThat(result.getCustomer().getName()).isEqualTo("João Atualizado");
+        assertThat(result.getCustomer().getEmail()).isEqualTo("novo@email.com");
+        assertThat(result.getVehicle().getBrand()).isEqualTo("VW");
+        assertThat(result.getVehicle().getModel()).isEqualTo("Gol");
+        verify(customers).save(customer);
+        verify(vehicles).save(vehicle);
+    }
+
+    @Test
+    void shouldApproveByCustomerAndDecrementStock() {
+        var order = orderWaitingApproval();
+        order.addPart(new WorkOrderPart(part, 3));
+        when(serviceOrders.findByCode("OS-PUBLIC")).thenReturn(Optional.of(order));
+
+        var result = service.decideApprovalByCustomer("OS-PUBLIC", "529.982.247-25", true, null);
+
+        assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.EM_EXECUCAO);
+        assertThat(part.getStockQuantity()).isEqualTo(7);
+        assertThat(result.getHistory().getLast().getComment())
+                .isEqualTo("Orçamento aprovado pelo cliente. OS enviada para execução.");
+        verify(parts).save(part);
+        verify(serviceOrders).save(order);
+    }
+
+    @Test
+    void shouldRejectCustomerApprovalWithInsufficientStock() {
+        var order = orderWaitingApproval();
+        order.addPart(new WorkOrderPart(part, 11));
+        when(serviceOrders.findByCode("OS-PUBLIC")).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> service.decideApprovalByCustomer("OS-PUBLIC", "529.982.247-25", true, null))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+                    assertThat(ex.getMessage()).contains("Filtro");
+                });
+        assertThat(part.getStockQuantity()).isEqualTo(10);
+        assertThat(order.getStatus()).isEqualTo(ServiceOrderStatus.AGUARDANDO_APROVACAO);
+        verify(parts, never()).save(any());
+        verify(serviceOrders, never()).save(any());
+    }
+
+    @Test
+    void shouldUseDefaultCommentWhenCustomerRejectsWithoutComment() {
+        var order = orderWaitingApproval();
+        when(serviceOrders.findByCode("OS-PUBLIC")).thenReturn(Optional.of(order));
+
+        var result = service.decideApprovalByCustomer("OS-PUBLIC", "529.982.247-25", false, null);
+
+        assertThat(result.getStatus()).isEqualTo(ServiceOrderStatus.RECUSADA);
+        assertThat(result.getHistory().getLast().getComment()).isEqualTo("Orçamento recusado pelo cliente.");
+        verify(metrics).recordServiceOrderStatusDuration(eq(ServiceOrderStatus.AGUARDANDO_APROVACAO), any(Duration.class));
+    }
+
+    @Test
+    void shouldRecordElapsedTimeInPreviousStatus() {
+        var order = persistedOrder(ServiceOrderStatus.RECEBIDA);
+        order.getHistory().add(new ServiceOrderStatusHistory(
+                1L, order, ServiceOrderStatus.RECEBIDA, "OS recebida", LocalDateTime.now().minusHours(2)));
+        when(serviceOrders.findById(1L)).thenReturn(Optional.of(order));
+
+        service.updateStatus(1L, ServiceOrderStatus.EM_DIAGNOSTICO, "Diagnóstico");
+
+        var durationCaptor = ArgumentCaptor.forClass(Duration.class);
+        verify(metrics).recordServiceOrderStatusDuration(eq(ServiceOrderStatus.RECEBIDA), durationCaptor.capture());
+        assertThat(durationCaptor.getValue())
+                .isGreaterThanOrEqualTo(Duration.ofHours(2))
+                .isLessThan(Duration.ofHours(2).plusMinutes(1));
+    }
+
+    @Test
+    void shouldNotRecordDurationWhenHistoryHasSingleEntry() {
+        var order = persistedOrder(ServiceOrderStatus.RECEBIDA);
+        when(serviceOrders.findById(1L)).thenReturn(Optional.of(order));
+
+        var result = service.updateStatus(1L, ServiceOrderStatus.EM_DIAGNOSTICO, "Diagnóstico");
+
+        assertThat(result.getHistory()).hasSize(1);
+        verify(metrics, never()).recordServiceOrderStatusDuration(any(), any());
+        verify(notifications).notifyStatusChanged(result);
+    }
+
+    private ServiceOrder persistedOrder(ServiceOrderStatus status) {
+        var now = OffsetDateTime.now();
+        return new ServiceOrder(1L, now, now, "OS-030", customer, vehicle, status, null, null,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, null, null, null, null);
     }
 
     private ServiceOrder orderWaitingApproval() {

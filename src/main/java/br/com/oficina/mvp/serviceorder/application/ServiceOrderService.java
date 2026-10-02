@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
@@ -225,7 +226,9 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
         }
         var previous = history.get(history.size() - 2);
         var current = history.get(history.size() - 1);
-        metrics.recordServiceOrderStatusDuration(previous.getStatus(), Duration.between(previous.getChangedAt(), current.getChangedAt()));
+        var zone = ZoneId.systemDefault();
+        var elapsed = Duration.between(previous.getChangedAt().atZone(zone), current.getChangedAt().atZone(zone));
+        metrics.recordServiceOrderStatusDuration(previous.getStatus(), elapsed);
     }
 
     private ServiceOrder findEntity(Long id) {
