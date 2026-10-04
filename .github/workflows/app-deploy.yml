@@ -160,7 +160,9 @@ jobs:
             echo "ingress_host=prod.oficina-mvp.local" >> "$GITHUB_OUTPUT"
           else
             echo "namespace=homolog" >> "$GITHUB_OUTPUT"
-            echo "ingress_host=homolog.oficina-mvp.local" >> "$GITHUB_OUTPUT"
+            # HOMOLOG_INGRESS_HOST (GitHub Variable): DNS do LoadBalancer do Kong, para a Lambda e o curl chegarem
+            # sem forçar header Host (fetch do Node não permite). Sem a variable, mantém o host fictício.
+            echo "ingress_host=${{ vars.HOMOLOG_INGRESS_HOST || 'homolog.oficina-mvp.local' }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Configure AWS Credentials

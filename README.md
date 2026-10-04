@@ -225,11 +225,18 @@ flowchart LR
 `oficina-mvp-infra-iac/namespaces.tf`), no mesmo cluster/Kong — o pipeline (`app-deploy.yml`) escolhe o
 namespace pela branch de origem. Como os dois ambientes compartilham o mesmo Kong, o `Ingress` de cada um
 usa um **host diferente** (`homolog.oficina-mvp.local` / `prod.oficina-mvp.local`, substituído em
-`k8s/ingress.yaml` pelo pipeline) para o Kong conseguir rotear sem colisão — sem um domínio real configurado
-ainda, testar apontando o `Host` da requisição manualmente:
+`k8s/ingress.yaml` pelo pipeline) para o Kong conseguir rotear sem colisão.
+
+Em `homolog`, o host pode ser trocado pela GitHub Variable **`HOMOLOG_INGRESS_HOST`**: configurada com o DNS do
+LoadBalancer do Kong (`kubectl get svc -n kong kong-kong-proxy`), o ambiente responde direto nessa URL — é o
+que a Lambda de autenticação (`BACKEND_BASE_URL`) precisa, já que o `fetch` do Node não permite forçar o header
+`Host`. Como o DNS do LoadBalancer muda a cada recriação do cluster, a variable precisa ser atualizada junto.
 
 ```bash
-curl -H "Host: homolog.oficina-mvp.local" http://<IP-do-LoadBalancer-do-Kong>/api/health
+# com HOMOLOG_INGRESS_HOST configurada
+curl http://<DNS-do-LoadBalancer-do-Kong>/api/health
+# sem a variable (host fictício)
+curl -H "Host: homolog.oficina-mvp.local" http://<DNS-do-LoadBalancer-do-Kong>/api/health
 ```
 
 ## Como rodar localmente
