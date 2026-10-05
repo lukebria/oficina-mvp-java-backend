@@ -956,8 +956,8 @@ flowchart TB
 
     MetricsServer -.->|CPU dos pods| AppHomolog
     NRI -->|"CPU/memória, pods, HPA, logs JSON"| NewRelic
-    AppHomolog -.->|"traces/métricas OTLP (pendente)"| NewRelic
-    AppProd -.->|"traces/métricas OTLP (pendente)"| NewRelic
+    AppHomolog -->|"traces + métricas de negócio (OTLP)"| NewRelic
+    AppProd -->|"traces + métricas de negócio (OTLP)"| NewRelic
     Lambda -.->|"extension (layer)"| NewRelic
 ```
 
@@ -970,10 +970,11 @@ Pontos que este diagrama deixa explícitos e que não apareciam nos diagramas fr
   `Ingress` (ver `oficina-mvp-java-backend/k8s/ingress.yaml`).
 - **RDS aplicado e validado** (04/10 e 05/10/2026): a aplicação conecta pelo `DB_HOST` (endpoint do RDS) e pela
   senha do Secrets Manager. O Postgres em pod (`k8s/banco.yaml`) ficou só como fallback.
-- **New Relic**: linhas cheias = dados chegando, validados no ensaio geral (CPU/memória, pods, HPA e logs JSON do
-  cluster pelo `nri-bundle`; alerta "aplicação indisponível" disparou por e-mail). Linhas pontilhadas = ainda
-  não chegando: traces e métricas de negócio da aplicação via OTLP (ajuste pendente de dependências do Spring
-  Boot 4) e dados da extension da Lambda (a layer é anexada, mas a chegada dos dados não foi conferida).
+- **New Relic**: CPU/memória, pods, HPA e logs JSON do cluster chegam pelo `nri-bundle` (validado no ensaio geral;
+  alerta "aplicação indisponível" disparou por e-mail). Traces e métricas de negócio da aplicação vão por OTLP:
+  corrigidos para o Spring Boot 4 no plano 13 e validados com a aplicação enviando ao New Relic (spans, latência e
+  as 3 métricas de negócio); falta só a confirmação no cluster. Linha pontilhada = extension da Lambda (a layer é
+  anexada, mas a chegada dos dados não foi conferida).
   Dashboards e alertas: `docs/observability/`.
 - **metrics-server**: o EKS não vem com ele; é instalado pelo `oficina-mvp-infra-iac` e é o que permite ao HPA
   ler CPU. Validado: 1 → 5 réplicas sob carga (ADR-002).
