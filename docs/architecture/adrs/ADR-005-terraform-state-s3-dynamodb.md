@@ -45,3 +45,14 @@ compartilhada entre os três repositórios (cada um com sua própria `key` no me
   referenciando a tabela compartilhada diretamente (sem o problema de bootstrap, por não terem state prévio) —
   mas isso significa que o primeiro `terraform init` desses dois repositórios só funciona depois que a Fase 1 do
   `oficina-mvp-infra-iac` já tiver sido aplicada e a tabela existir de fato na conta.
+
+## Adendo — deploy real (2026-10-04/05)
+
+- **Bucket renomeado**: o bucket original (`oficina-mvp-infra-iac`) pertencia a **outra conta AWS** (nomes de bucket
+  são globais), e o `terraform init` falhava. O state passou para **`oficina-mvp-tfstate-536036031274`** (sufixo =
+  ID da conta), criado uma vez pela CLI, privado, versionado e criptografado. A decisão (S3 + DynamoDB) não muda.
+- **Lock na prática**: `oficina-mvp-infra-db` e `oficina-auth-function` usam a tabela de lock normalmente. No
+  `oficina-mvp-infra-iac` a Fase 2 não foi feita: como a tabela é criada e destruída junto com o próprio ambiente
+  (que é recriado do zero a cada janela de uso), travar o state do repo que a cria seria circular. O risco
+  (dois `apply` simultâneos no infra-iac) é mitigado pela chave `DEPLOY_ENABLED` e pela execução sequencial
+  descrita no runbook do projeto.
