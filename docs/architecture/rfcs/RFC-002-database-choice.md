@@ -57,3 +57,15 @@ disponibilidade nativa, e sem nenhuma linha de Terraform.
 - Backend do state e security group do RDS dependem de outputs do repositório de infra Kubernetes
   (`vpc_id`, `subnet_ids`, `eks_cluster_security_group_id`) via `terraform_remote_state` — acopla a ordem de
   aplicação dos dois repositórios (infra K8s primeiro).
+
+## Adendo — validação em ambiente real (2026-10-04/05)
+
+- **Custo medido**: RDS `db.t3.micro` single-AZ + 20 GB ≈ **US$ 0,02/h** (ambiente completo dos 4 repos ≈ US$ 0,26/h).
+  A ressalva de custo acima fica resolvida: cabe no crédito do lab, desde que o ambiente seja destruído depois de
+  cada uso.
+- **Versão**: `engine_version = "16"` (só a major). A `16.4` original foi retirada pela AWS e o apply falhava; com a
+  major, a AWS escolhe a minor default (16.13 no teste).
+- **Banco/usuário** alinhados com a aplicação (`oficina_mvp`/`oficina`). A aplicação conectou, rodou as migrations
+  do Flyway e atendeu o fluxo completo.
+- **Migração**: não foi preciso migrar dados (ambiente criado do zero). O `k8s/banco.yaml` segue como fallback,
+  usado só quando `DB_HOST` não está configurada.

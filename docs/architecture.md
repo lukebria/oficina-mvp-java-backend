@@ -909,8 +909,8 @@ sequenceDiagram
 
 Os diagramas da seção 13 cobrem só o processo Spring Boot. Este cobre o desenho de nuvem completo exigido pelo
 Tech Challenge Fase 3: os 4 repositórios, os 2 API Gateways distintos, o banco gerenciado e a observabilidade
-(New Relic — ver `POST-TECH/FASE-3/plans/05-observabilidade-new-relic.md`; instrumentação ainda não implementada
-no momento em que este diagrama foi escrito, 2026-09-26).
+(New Relic). Atualizado em 2026-10-05, depois do primeiro deploy real e do ensaio geral, nos quais tudo o que está
+neste diagrama subiu pelos pipelines e foi validado.
 
 ```mermaid
 flowchart TB
@@ -926,6 +926,8 @@ flowchart TB
 
         subgraph EKS["Cluster EKS — oficina-mvp-infra-iac (repo 2/4)"]
             Kong["Kong API Gateway<br/>(Ingress Controller, DB-less,<br/>plugin jwt valida token de cliente)"]
+            MetricsServer["metrics-server<br/>(alimenta o HPA)"]
+            NRI["New Relic nri-bundle<br/>(infra K8s + logs)"]
             subgraph NsHomolog["namespace: homolog"]
                 AppHomolog["oficina-mvp-java-backend<br/>(repo 4/4)"]
             end
@@ -938,7 +940,7 @@ flowchart TB
 
         RDS[("Amazon RDS PostgreSQL<br/>oficina-mvp-infra-db (repo 3/4)")]
         ECR["Amazon ECR"]
-        NewRelic["New Relic<br/>(APM + Infra K8s + Logs — planejado)"]
+        NewRelic["New Relic<br/>(dashboards de negócio/operação + alertas)"]
 
         AppHomolog --> RDS
         AppProd --> RDS
@@ -952,10 +954,11 @@ flowchart TB
     Cliente -->|"3: rotas protegidas<br/>Authorization: Bearer token-cliente"| Kong
     Lambda -.->|"2: JWT do cliente"| Cliente
 
-    AppHomolog -.->|APM/logs| NewRelic
-    AppProd -.->|APM/logs| NewRelic
-    EKS -.->|infra metrics| NewRelic
-    Lambda -.->|extension| NewRelic
+    MetricsServer -.->|CPU dos pods| AppHomolog
+    NRI -->|"CPU/memória, pods, HPA, logs JSON"| NewRelic
+    AppHomolog -.->|"traces/métricas OTLP (pendente)"| NewRelic
+    AppProd -.->|"traces/métricas OTLP (pendente)"| NewRelic
+    Lambda -.->|"extension (layer)"| NewRelic
 ```
 
 Pontos que este diagrama deixa explícitos e que não apareciam nos diagramas fragmentados de cada repositório:
@@ -965,11 +968,15 @@ Pontos que este diagrama deixa explícitos e que não apareciam nos diagramas fr
   da decisão do Kong, mantido por não haver motivo para trocar).
 - **Namespaces `homolog`/`prod`** compartilhando o mesmo cluster/Kong (ADR-004), diferenciados por `host` no
   `Ingress` (ver `oficina-mvp-java-backend/k8s/ingress.yaml`).
-- **RDS ainda não aplicado** no momento em que este diagrama foi escrito — `oficina-mvp-infra-db` tem o
-  Terraform pronto (ver `POST-TECH/FASE-3/plans/01-infra-db-novo-repo.md`), mas o `apply` depende de credenciais
-  AWS ainda pendentes de configuração nos GitHub Secrets.
-- **New Relic** representado como planejado (linhas pontilhadas) — a instrumentação de fato ainda não existe em
-  nenhum dos 4 repositórios (maior gap do projeto, ver `plans/05-observabilidade-new-relic.md`).
+- **RDS aplicado e validado** (04/10 e 05/10/2026): a aplicação conecta pelo `DB_HOST` (endpoint do RDS) e pela
+  senha do Secrets Manager. O Postgres em pod (`k8s/banco.yaml`) ficou só como fallback.
+- **New Relic**: linhas cheias = dados chegando, validados no ensaio geral (CPU/memória, pods, HPA e logs JSON do
+  cluster pelo `nri-bundle`; alerta "aplicação indisponível" disparou por e-mail). Linhas pontilhadas = ainda
+  não chegando: traces e métricas de negócio da aplicação via OTLP (ajuste pendente de dependências do Spring
+  Boot 4) e dados da extension da Lambda (a layer é anexada, mas a chegada dos dados não foi conferida).
+  Dashboards e alertas: `docs/observability/`.
+- **metrics-server**: o EKS não vem com ele; é instalado pelo `oficina-mvp-infra-iac` e é o que permite ao HPA
+  ler CPU. Validado: 1 → 5 réplicas sob carga (ADR-002).
 - **Validação do JWT de cliente em duas camadas** (ADR-006): o Kong valida assinatura/expiração via plugin
   nativo antes de rotear; a aplicação continua validando e revalidando o status do cliente no banco — nenhuma
   das duas camadas foi removida, é defesa em profundidade.

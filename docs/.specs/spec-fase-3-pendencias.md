@@ -1,3 +1,7 @@
+> **Documento histórico (levantamento de 2026-09-26).** Quase tudo listado aqui já foi feito e validado em
+> ambiente real em 2026-10-04/05. Estado atual: seções "Estado atual" e "Pendências conhecidas" do
+> [README](../../README.md) e o `STATUS-PROJETO-EQUIPE.md` do repositório de specs.
+
 # Spec — Tarefas pendentes da Fase 3 (Tech Challenge)
 
 Baseado em `13SOAT - Fase 3 - Tech Challenge.pdf` e na análise dos quatro repositórios do projeto:
