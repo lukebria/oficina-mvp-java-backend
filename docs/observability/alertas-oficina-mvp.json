@@ -1,0 +1,86 @@
+{
+  "policy": {
+    "name": "Oficina MVP - Alertas",
+    "incidentPreference": "PER_CONDITION"
+  },
+  "notificacao": {
+    "tipo": "EMAIL",
+    "destino": "techpos2026@gmail.com",
+    "gatilhos": [
+      "ACTIVATED",
+      "CLOSED"
+    ],
+    "workflow": "Oficina MVP - notificar e-mail (filtro: labels.policyIds = id da policy)"
+  },
+  "conditions": [
+    {
+      "name": "Falha no processamento de ordens de serviço",
+      "description": "Erro 5xx em qualquer endpoint de ordem de serviço (abertura, aprovação, status, diagnóstico, fluxo público).",
+      "enabled": true,
+      "nrql": {
+        "query": "FROM Span SELECT count(*) WHERE service.name = 'oficina-mvp-backend' AND outcome = 'SERVER_ERROR' AND name LIKE '%service-orders%'"
+      },
+      "signal": {
+        "aggregationWindow": 60,
+        "aggregationMethod": "EVENT_FLOW",
+        "aggregationDelay": 120
+      },
+      "terms": [
+        {
+          "priority": "CRITICAL",
+          "operator": "ABOVE",
+          "threshold": 0,
+          "thresholdDuration": 300,
+          "thresholdOccurrences": "AT_LEAST_ONCE"
+        }
+      ],
+      "violationTimeLimitSeconds": 86400
+    },
+    {
+      "name": "Falha em integração externa",
+      "description": "Métrica de negócio integration.failure (ex.: envio de e-mail de notificação de status da OS).",
+      "enabled": true,
+      "nrql": {
+        "query": "FROM Metric SELECT sum(integration.failure)"
+      },
+      "signal": {
+        "aggregationWindow": 60,
+        "aggregationMethod": "EVENT_FLOW",
+        "aggregationDelay": 120
+      },
+      "terms": [
+        {
+          "priority": "CRITICAL",
+          "operator": "ABOVE",
+          "threshold": 0,
+          "thresholdDuration": 300,
+          "thresholdOccurrences": "AT_LEAST_ONCE"
+        }
+      ],
+      "violationTimeLimitSeconds": 86400
+    },
+    {
+      "name": "Aplicação indisponível (healthcheck/uptime)",
+      "description": "Nenhum pod disponível no deployment da aplicação por 5 minutos (sem dados = cluster desligado, não alerta).",
+      "enabled": true,
+      "nrql": {
+        "query": "FROM K8sDeploymentSample SELECT latest(podsAvailable) WHERE clusterName = 'oficina-mecnica-lab-cluster' AND deploymentName = 'oficina-app-deployment'"
+      },
+      "signal": {
+        "aggregationWindow": 60,
+        "aggregationMethod": "EVENT_FLOW",
+        "aggregationDelay": 120
+      },
+      "terms": [
+        {
+          "priority": "CRITICAL",
+          "operator": "BELOW",
+          "threshold": 1,
+          "thresholdDuration": 300,
+          "thresholdOccurrences": "ALL"
+        }
+      ],
+      "violationTimeLimitSeconds": 86400
+    }
+  ]
+}
