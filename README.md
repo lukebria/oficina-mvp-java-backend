@@ -1132,9 +1132,10 @@ Function Serverless (Node/TypeScript) que emite o JWT do fluxo público de clien
 Os 4 repositórios exigidos pelo enunciado existem, com CI/CD e deploy automático (ver [Estado atual](#estado-atual-tech-challenge-fase-3-2026-10-05)).
 O que ainda falta, em ordem (acompanhamento detalhado em `STATUS-PROJETO-EQUIPE.md` no repositório de specs):
 
-1. **Traces e métricas da aplicação no New Relic**: as variáveis chegam ao pod, mas no **Spring Boot 4** a
-   auto-configuração de tracing/OpenTelemetry fica em módulos próprios que não estão no `pom.xml`, então a app não
-   exporta nada via OTLP. Logs, CPU/memória, pods e HPA já chegam pelo agente do cluster.
+1. **Traces e métricas da aplicação no New Relic**: ~~a app não exportava nada via OTLP~~ **corrigido** (plano 13:
+   `spring-boot-starter-opentelemetry` + propriedades do Spring Boot 4 + `trace.id` nos logs). Testado com a app
+   local enviando direto ao New Relic (spans, latência e as 3 métricas de negócio chegaram); falta só confirmar no
+   cluster na próxima janela de deploy.
 2. **`readinessProbe`/`livenessProbe`** no `k8s/app.yaml`: sem elas, o Kong manda tráfego para pods que ainda
    estão subindo (o Spring leva ~60 s) e responde `502`, o que aparece sempre que o HPA cria réplicas.
 3. **Pico do HPA na inicialização**: a subida da JVM passa de 100% do `requests.cpu` (`100m`), então toda
