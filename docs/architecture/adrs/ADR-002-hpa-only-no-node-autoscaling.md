@@ -40,6 +40,11 @@ Karpenter neste projeto.
 - **Limite real de capacidade**: com no máximo 3 nós `t3.medium`, existe um teto de pods que o cluster consegue
   agendar — se o HPA tentar escalar além da capacidade dos nós existentes, novos pods ficam `Pending` até haver
   espaço (não há criação automática de nós para acomodá-los).
+- **Pré-requisito: metrics-server** (adendo de 2026-10-04). O EKS não vem com o metrics-server, e sem ele o HPA
+  fica com `cpu: <unknown>` e nunca escala — visto no primeiro deploy real. O `oficina-mvp-infra-iac` passou a
+  instalá-lo (`modules/metrics-server`, chart Helm oficial; o add-on gerenciado do EKS é negado pelo Learner Lab).
+  Validação: `kubectl top pods` e `kubectl get hpa` mostrando a porcentagem real + teste de carga escalando de 1
+  para 2+ réplicas.
 - Esta decisão é adequada para o volume de um projeto de estudo/demonstração; numa carga de produção real com
   picos imprevisíveis, valeria reconsiderar Cluster Autoscaler com limites de custo bem definidos (ex: teto
   máximo de nós, alertas de billing).
