@@ -424,6 +424,15 @@ As variáveis estão documentadas no `.env.example` e são lidas pelo `applicati
 | `MAIL_USERNAME`          | *(vazio)*                                                      | Usuário/e-mail SMTP         |
 | `MAIL_PASSWORD`          | *(vazio)*                                                      | Senha de app do Gmail       |
 | `MAIL_FROM`              | `MAIL_USERNAME` ou `no-reply@oficina.com`                      | Remetente dos e-mails de notificação de status |
+| `NEW_RELIC_LICENSE_KEY`  | *(vazio)*                                                      | License Key (`INGEST - LICENSE`) do New Relic — header `api-key` do export OTLP |
+| `NEW_RELIC_OTLP_ENDPOINT` | `http://localhost:4318/v1/traces`                             | Endpoint OTLP de traces (New Relic US: `https://otlp.nr-data.net:4318/v1/traces`) |
+| `NEW_RELIC_OTLP_METRICS_ENDPOINT` | `http://localhost:4318/v1/metrics`                    | Endpoint OTLP das métricas de negócio (`BusinessMetrics`) |
+| `TRACING_SAMPLING_PROBABILITY` | `0` (nada é rastreado)                                   | Fração de requisições rastreadas (`1.0` = todas) |
+| `OTLP_METRICS_EXPORT_ENABLED` | `false`                                                   | Liga o export OTLP das métricas de negócio |
+
+No Kubernetes, as 5 variáveis de observabilidade vêm de GitHub Secret/Variables com os mesmos nomes, repassadas
+pelo pipeline (`app-deploy.yml`) via `k8s/config-secret.yaml`. Sem elas, o pipeline usa os defaults acima
+(inertes: nada é exportado).
 
 >
 > ```yaml

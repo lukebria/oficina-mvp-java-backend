@@ -120,6 +120,31 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: MAIL_PORT
+            - name: NEW_RELIC_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NEW_RELIC_OTLP_ENDPOINT
+            - name: NEW_RELIC_OTLP_METRICS_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NEW_RELIC_OTLP_METRICS_ENDPOINT
+            - name: TRACING_SAMPLING_PROBABILITY
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: TRACING_SAMPLING_PROBABILITY
+            - name: OTLP_METRICS_EXPORT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: OTLP_METRICS_EXPORT_ENABLED
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: NEW_RELIC_LICENSE_KEY
 ---
 # yaml-language-server: $schema=https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.28.0/service-v1.json
 apiVersion: v1

@@ -203,10 +203,16 @@ jobs:
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           MAIL_HOST: ${{ vars.MAIL_HOST }}
           MAIL_PORT: ${{ vars.MAIL_PORT }}
+          # Observabilidade (plano 05): sem as variables, defaults inertes (nada é exportado).
+          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+          NEW_RELIC_OTLP_ENDPOINT: ${{ vars.NEW_RELIC_OTLP_ENDPOINT || 'http://localhost:4318/v1/traces' }}
+          NEW_RELIC_OTLP_METRICS_ENDPOINT: ${{ vars.NEW_RELIC_OTLP_METRICS_ENDPOINT || 'http://localhost:4318/v1/metrics' }}
+          TRACING_SAMPLING_PROBABILITY: ${{ vars.TRACING_SAMPLING_PROBABILITY || '0' }}
+          OTLP_METRICS_EXPORT_ENABLED: ${{ vars.OTLP_METRICS_EXPORT_ENABLED || 'false' }}
 
         run: |
           # 1. Substitui os placeholders de Secrets no config-secret.yaml
-          envsubst '${DB_HOST} ${DB_PASSWORD} ${JWT_SECRET} ${CUSTOMER_JWT_SECRET} ${INTERNAL_API_KEY} ${SEED_ADMIN_PASSWORD} ${MAIL_USERNAME} ${MAIL_PASSWORD} ${MAIL_FROM} ${MAIL_HOST} ${MAIL_PORT}' < k8s/config-secret.yaml > k8s/config-secret.tmp.yaml
+          envsubst '${DB_HOST} ${DB_PASSWORD} ${JWT_SECRET} ${CUSTOMER_JWT_SECRET} ${INTERNAL_API_KEY} ${SEED_ADMIN_PASSWORD} ${MAIL_USERNAME} ${MAIL_PASSWORD} ${MAIL_FROM} ${MAIL_HOST} ${MAIL_PORT} ${NEW_RELIC_LICENSE_KEY} ${NEW_RELIC_OTLP_ENDPOINT} ${NEW_RELIC_OTLP_METRICS_ENDPOINT} ${TRACING_SAMPLING_PROBABILITY} ${OTLP_METRICS_EXPORT_ENABLED}' < k8s/config-secret.yaml > k8s/config-secret.tmp.yaml
           mv k8s/config-secret.tmp.yaml k8s/config-secret.yaml
 
           # 2. Substitui o placeholder da Imagem Docker no app.yaml
