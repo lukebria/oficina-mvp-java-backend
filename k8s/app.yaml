@@ -29,6 +29,31 @@ spec:
             limits:
               cpu: "500m"      # Máximo de 0.5 de CPU
               memory: "512Mi"  # Limite máximo de RAM
+          # =========================================================
+          # PROBES DE SAÚDE (plano 14) - endpoints do Spring Boot Actuator
+          # =========================================================
+          # Sem elas o pod era considerado pronto assim que o container iniciava, mas o Spring leva ~60 s para
+          # subir: o Kong mandava tráfego antes da hora (502 a cada deploy/escala) e o pico de CPU da subida da
+          # JVM entrava na conta do HPA (ia a 5 réplicas a cada deploy). Com a readiness, o HPA descarta a CPU de
+          # pods ainda não prontos.
+          startupProbe:          # até ~150 s para subir, sem a liveness reiniciar o pod no meio
+            httpGet:
+              path: /actuator/health/liveness
+              port: 3000
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:        # só recebe tráfego (Service/Kong) quando a aplicação está pronta
+            httpGet:
+              path: /actuator/health/readiness
+              port: 3000
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:         # reinicia o pod se a aplicação travar
+            httpGet:
+              path: /actuator/health/liveness
+              port: 3000
+            periodSeconds: 10
+            failureThreshold: 3
           env:
             - name: APP_PORT
               valueFrom:

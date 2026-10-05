@@ -377,7 +377,7 @@ Os manifests ficam em [`/k8s`](k8s):
 |-----------------------|--------------------------------------------------------------------------------------------------|
 | `config-secret.yaml`  | `ConfigMap app-config` + `Secret app-secrets` (credenciais de banco, JWT, admin seed e e-mail)   |
 | `banco.yaml`          | `Deployment banco-deployment` + `Service banco-service` (PostgreSQL em pod, **fallback** quando `DB_HOST` não está configurada; o banco real é o RDS) |
-| `app.yaml`            | `Deployment oficina-app-deployment` (com `resources.requests/limits`) + `Service` (ClusterIP)    |
+| `app.yaml`            | `Deployment oficina-app-deployment` (com `resources.requests/limits` e probes `startup`/`readiness`/`liveness` no Actuator) + `Service` (ClusterIP) |
 | `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (1 a 5 réplicas, CPU 20%)                               |
 | `ingress.yaml`        | `Ingress oficina-app-ingress` (`ingressClassName: kong`) — rota geral que o Kong usa pra encontrar o Service da app |
 | `ingress-public.yaml` | `Ingress oficina-app-public-ingress` — só `/api/public/service-orders/**`, com o plugin `jwt` do Kong anexado (ADR-006) |
@@ -1136,10 +1136,11 @@ O que ainda falta, em ordem (acompanhamento detalhado em `STATUS-PROJETO-EQUIPE.
    `spring-boot-starter-opentelemetry` + propriedades do Spring Boot 4 + `trace.id` nos logs). Testado com a app
    local enviando direto ao New Relic (spans, latência e as 3 métricas de negócio chegaram); falta só confirmar no
    cluster na próxima janela de deploy.
-2. **`readinessProbe`/`livenessProbe`** no `k8s/app.yaml`: sem elas, o Kong manda tráfego para pods que ainda
-   estão subindo (o Spring leva ~60 s) e responde `502`, o que aparece sempre que o HPA cria réplicas.
-3. **Pico do HPA na inicialização**: a subida da JVM passa de 100% do `requests.cpu` (`100m`), então toda
-   inicialização leva o HPA ao máximo (5 réplicas) por ~5 min. Avaliar `requests.cpu` maior e/ou janela de
-   estabilização.
+2. **Probes de saúde**: ~~sem `readinessProbe`, o Kong mandava tráfego para pods ainda subindo (`502`)~~ **corrigido**
+   (plano 14: probes `startup`/`readiness`/`liveness` + `/actuator/health/**` liberado no Spring Security). Falta
+   confirmar no cluster: sem `502` no deploy e na escala.
+3. **Pico do HPA na inicialização**: com a `readinessProbe`, o HPA passa a descartar a CPU de pods ainda não prontos,
+   então o pico da subida da JVM deve deixar de levá-lo a 5 réplicas. Confirmar no cluster; se persistir, adicionar
+   janela de estabilização no `hpa.yaml`.
 4. Remover `k8s/banco.yaml` (Postgres em pod), hoje só fallback.
 

@@ -45,6 +45,10 @@ Karpenter neste projeto.
   instalá-lo (`modules/metrics-server`, chart Helm oficial; o add-on gerenciado do EKS é negado pelo Learner Lab).
   Validação: `kubectl top pods` e `kubectl get hpa` mostrando a porcentagem real + teste de carga escalando de 1
   para 2+ réplicas.
+- **Probes de saúde** (adendo de 2026-10-05, plano 14). Sem `readinessProbe`, os pods novos recebiam tráfego antes
+  de o Spring subir (`502`), e o pico de CPU da inicialização da JVM entrava na conta do HPA, que ia a 5 réplicas a
+  cada deploy. Com as probes (`startup`/`readiness`/`liveness` no Actuator), o HPA descarta a CPU de pods ainda não
+  prontos e o Kong só recebe tráfego de pods prontos.
 - Esta decisão é adequada para o volume de um projeto de estudo/demonstração; numa carga de produção real com
   picos imprevisíveis, valeria reconsiderar Cluster Autoscaler com limites de custo bem definidos (ex: teto
   máximo de nós, alertas de billing).
