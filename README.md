@@ -349,9 +349,19 @@ Os manifests ficam em [`/k8s`](k8s):
 
 ### Via CI/CD (automático)
 
-A pipeline (`.github/workflows/app-deploy.yml`) aplica os manifests automaticamente a cada push em `main`/`master`,
-depois de rodar os testes, o SonarQube e o build/push da imagem Docker para o ECR — ver
-[Fluxo de deploy (CI/CD)](#diagramas).
+A pipeline (`.github/workflows/app-deploy.yml`) aplica os manifests automaticamente a cada push em `homolog`
+(namespace `homolog`) e `master` (namespace `prod`), depois de rodar os testes, o SonarQube e o build/push da
+imagem Docker para o ECR — ver [Fluxo de deploy (CI/CD)](#diagramas).
+
+**Chave de deploy — variable `DEPLOY_ENABLED`** (o crédito do AWS Academy é limitado; detalhe em
+`plans/10-chave-deploy-enabled.md` no repositório de specs):
+- `true` → em push para `homolog`/`master`, executa automaticamente o push no ECR e o deploy no EKS (deploy automático de homologação e
+  produção, como pede o enunciado).
+- `false` ou ausente → o pipeline roda só o que não depende da AWS e **pula** (*skipped*) o push no ECR e o deploy no EKS. É o estado
+  padrão fora de uma janela de deploy, para um merge não subir recursos pagos.
+- **Disparo manual** (*Actions → Run workflow*) ignora a chave: rodar pelo botão já é uma decisão explícita.
+- Ligar/desligar: *Settings → Secrets and variables → Actions → Variables → `DEPLOY_ENABLED`*.
+
 
 ### Manualmente (fora da pipeline)
 
