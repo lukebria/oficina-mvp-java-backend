@@ -42,6 +42,16 @@ desligado) a condição de uptime **não** alerta — de propósito, o ambiente 
 - **Alertas**: *Alerts* → *Alert policies* → criar a policy e uma *NRQL condition* por item de
   `alertas-oficina-mvp.json` (mesmos NRQL/thresholds); depois *Workflows* → e-mail filtrando pela policy.
 
+## Como a aplicação envia traces/métricas (Spring Boot 4)
+
+No Spring Boot 4 a auto-configuração de tracing/OpenTelemetry fica em módulos próprios: o `pom.xml` usa o
+**`spring-boot-starter-opentelemetry`** (antes havia só as bibliotecas soltas, que não se ligam sozinhas, e a app
+não exportava nada). Propriedades em `application.yml`: `management.opentelemetry.tracing.export.otlp.*` (traces),
+`management.otlp.metrics.export.*` (métricas), `management.opentelemetry.resource-attributes.service.name`
+(`oficina-mvp-backend`). Os logs JSON renomeiam `traceId`/`spanId` para **`trace.id`/`span.id`**
+(`logging.structured.json.rename`), que é o que o New Relic usa para ligar log a trace. O teste
+`ObservabilityAutoConfigurationIntegrationTest` quebra se esses módulos sumirem do build.
+
 ## Variáveis que ligam o envio de dados
 
 | Repositório | Secret / Variable |

@@ -37,29 +37,37 @@ management:
     web:
       exposure:
         include: health,info,metrics
-  # Observabilidade (Fase 3, plano 05) - tracing distribuído exportado via OTLP (New Relic aceita OTLP
-  # nativamente). Sampling em 0% por padrão: sem TRACING_SAMPLING_PROBABILITY configurado, nenhum trace é
-  # criado/exportado (nenhuma chamada de rede acontece) - fica pronto pra ligar assim que houver uma conta
-  # New Relic com License Key. Uma vez ativo, os logs (ver "logging" abaixo) e as métricas de negócio
-  # (BusinessMetrics) já ficam correlacionados por trace/span automaticamente.
+  # Observabilidade (Fase 3, planos 05 e 13) - traces e métricas exportados via OTLP para o New Relic (aceita
+  # OTLP nativamente). Nomes de propriedade do Spring Boot 4 (auto-configuração via spring-boot-starter-opentelemetry).
+  # Tudo inerte por padrão: sampling 0 (nenhum trace é criado) e export de métricas desligado (nenhuma chamada de
+  # rede) - liga com TRACING_SAMPLING_PROBABILITY/OTLP_METRICS_EXPORT_ENABLED + endpoint + License Key, configurados
+  # pelo pipeline. Uma vez ativo, os logs (ver "logging" abaixo) ganham trace.id/span.id automaticamente.
   tracing:
     sampling:
       probability: ${TRACING_SAMPLING_PROBABILITY:0}
-  otlp:
+  opentelemetry:
+    # Nome do serviço no New Relic (o mesmo usado nos dashboards/alertas de docs/observability).
+    resource-attributes:
+      service.name: oficina-mvp-backend
     tracing:
-      endpoint: ${NEW_RELIC_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
-      headers:
-        api-key: ${NEW_RELIC_LICENSE_KEY:}
+      export:
+        otlp:
+          endpoint: ${NEW_RELIC_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+          headers:
+            api-key: ${NEW_RELIC_LICENSE_KEY:}
+  otlp:
     # Métricas de negócio (BusinessMetrics: service_order.created, service_order.status.duration,
-    # integration.failure) - registry separado do tracing acima. "enabled: false" por padrão é uma segunda
-    # trava de segurança (além do endpoint apontar pra localhost) - sem isso, nenhuma chamada de rede de
-    # métrica acontece, mesmo com o registry no classpath.
+    # integration.failure). "enabled: false" por padrão é uma trava extra além do endpoint em localhost.
     metrics:
       export:
         enabled: ${OTLP_METRICS_EXPORT_ENABLED:false}
         url: ${NEW_RELIC_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
         headers:
           api-key: ${NEW_RELIC_LICENSE_KEY:}
+    # Logs NÃO vão por OTLP: já chegam ao New Relic pelo agente do cluster (nri-bundle); duplicar gastaria a cota.
+    logging:
+      export:
+        enabled: false
 
 # Logging estruturado em JSON (Elastic Common Schema) - inclui trace.id/span.id automaticamente quando o
 # tracing acima estiver ativo, permitindo correlacionar logs entre requisições/serviços.
@@ -67,6 +75,12 @@ logging:
   structured:
     format:
       console: ecs
+    # O Micrometer grava o contexto do trace no MDC como traceId/spanId; o New Relic liga log -> trace pelo atributo
+    # trace.id (e span.id). Renomear aqui faz o "logs in context" funcionar e casa com o widget de logs do dashboard.
+    json:
+      rename:
+        traceId: trace.id
+        spanId: span.id
 
 springdoc:
   api-docs:
