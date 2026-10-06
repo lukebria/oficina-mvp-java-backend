@@ -1,17 +1,29 @@
+> **Documento histórico (levantamento de 2026-09-26).** Quase tudo listado aqui já foi feito e validado em
+> ambiente real em 2026-10-04/05. Estado atual: seções "Estado atual" e "Pendências conhecidas" do
+> [README](../../README.md) e o `STATUS-PROJETO-EQUIPE.md` do repositório de specs.
+
 # Spec — Tarefas pendentes da Fase 3 (Tech Challenge)
 
-Baseado em `13SOAT - Fase 3 - Tech Challenge.pdf` e na análise dos três repositórios existentes:
+Baseado em `13SOAT - Fase 3 - Tech Challenge.pdf` e na análise dos quatro repositórios do projeto:
 [`oficina-mvp-java`](https://github.com/lukebria/oficina-mvp-java-backend),
-[`oficina-auth-function`](https://github.com/lukebria/oficina-auth-function) e
-[`oficina-mvp-infra-iac`](https://github.com/lukebria/oficina-mvp-infra-iac).
+[`oficina-auth-function`](https://github.com/lukebria/oficina-auth-function),
+[`oficina-mvp-infra-iac`](https://github.com/lukebria/oficina-mvp-infra-iac) e
+[`oficina-mvp-infra-db`](https://github.com/lukebria/oficina-mvp-infra-db) (criado em 2026-09-26, repo 3/4 que
+faltava, ainda vazio).
+
+> **Nota (2026-09-26)**: todas as "decisões em aberto" listadas neste documento já foram fechadas com o
+> Lucas (ver bloco "✅" na seção "Decisões em aberto (consolidado)" e o registro formal em
+> `POST-TECH/FASE-3/plans/00-decisoes-tecnicas.md`). Este parágrafo de abertura é mantido como estava
+> originalmente por valor histórico, mas as decisões abaixo já não estão mais em aberto.
 
 Este documento **não decide** os pontos que o enunciado deixa em aberto — cada um deles está marcado como
 **decisão em aberto** e listado de novo, consolidado, na última seção. Já decididas pelo grupo: **nuvem = AWS**
 (Academy Learner Lab), **API Gateway = Kong**, e **banco = PostgreSQL via Amazon RDS** (provável — falta só
-confirmar na prática que o custo cabe no crédito do lab). Os três repositórios já são públicos e com nomes de
-branch alinhados (`master`), então a proteção de branch já pode ser configurada em todos — só falta fazer isso
-(ver 2.6). Seguem em aberto: ferramenta de observabilidade, estratégia de homologação/produção, backend do
-state do Terraform, e autoscaling de nós.
+confirmar na prática que o custo cabe no crédito do lab). Os três repositórios originais já são públicos e com
+nomes de branch alinhados (`master`), então a proteção de branch já pode ser configurada em todos — só falta
+fazer isso no repositório novo (ver 2.6). Seguem em aberto: ~~ferramenta de observabilidade, estratégia de
+homologação/produção, backend do state do Terraform, e autoscaling de nós~~ (todas decididas em 2026-09-26,
+ver nota acima).
 
 ## Repositórios exigidos vs. existentes
 
@@ -19,7 +31,7 @@ state do Terraform, e autoscaling de nós.
 |---|----------------------------------------------|----------------------------------------------------------------------------------|----------|
 | 1 | Lambda (Function Serverless)                 | [`oficina-auth-function`](https://github.com/lukebria/oficina-auth-function)     | Existe, código completo, Terraform de deploy pronto |
 | 2 | Infraestrutura Kubernetes (Terraform)        | [`oficina-mvp-infra-iac`](https://github.com/lukebria/oficina-mvp-infra-iac)     | Existe, provisiona EKS + ECR |
-| 3 | Infraestrutura do Banco de Dados Gerenciado (Terraform) | **não existe**                                                        | Banco hoje é um `Deployment` comum de Postgres dentro do mesmo cluster EKS (`k8s/banco.yaml`, no repo do app) |
+| 3 | Infraestrutura do Banco de Dados Gerenciado (Terraform) | [`oficina-mvp-infra-db`](https://github.com/lukebria/oficina-mvp-infra-db) (criado em 2026-09-26) | Repositório existe mas está vazio — Terraform do RDS ainda não escrito (ver `plans/01-infra-db-novo-repo.md`). Banco hoje continua um `Deployment` comum de Postgres dentro do mesmo cluster EKS (`k8s/banco.yaml`, no repo do app) até a migração |
 | 4 | Aplicação principal em Kubernetes            | [`oficina-mvp-java`](https://github.com/lukebria/oficina-mvp-java-backend)       | Existe, código + Dockerfile + manifests + pipeline |
 
 ---
@@ -104,10 +116,12 @@ state do Terraform, e autoscaling de nós.
 
 - [x] Código + Dockerfile + manifests K8s (`app.yaml`, `hpa.yaml`, `config-secret.yaml`) + pipeline
   (`app-deploy.yml`: testes, SonarQube, build/push da imagem pro ECR, deploy no cluster) — feito.
-- [ ] **O trabalho da Fase 3 em si (status do cliente, endpoint interno, filtro de API key, exigência de JWT
-  nas rotas públicas) ainda não está commitado** — está todo modificado/novo no working tree da branch
-  `feature/tech_chalange_fase_3` (só o `README.md` e o `docs/.specs/spec-init-fase-3.md` foram commitados até
-  agora). Precisa revisar, commitar o restante e abrir PR para `master`.
+- [x] **O trabalho da Fase 3 em si (status do cliente, endpoint interno, filtro de API key, exigência de JWT
+  nas rotas públicas) já foi commitado e mergeado em `master`** via PR #24
+  (`feature/tech_chalange_fase_3` → `master`, commit `da20409`). Verificado em 2026-09-26: working tree
+  limpo, `master`/`homolog` sincronizadas, `InternalApiKeyAuthenticationFilter`/`InternalApiProperties`
+  presentes em `master`. *(Correção: este item estava desatualizado — a pendência foi resolvida depois que
+  este spec foi escrito.)*
 - [ ] `k8s/banco.yaml` precisa ser removido quando o Repo 3 existir (ver 2.3).
 - [x] Branch `master` protegida + PR obrigatório para merge (ver 2.6).
 - [ ] Deploy automático diferenciando homologação/produção — existe uma branch remota `homolog`, mas
@@ -207,10 +221,11 @@ para o mesmo commit em todos.
 - [x] Function Serverless para autenticação.
 - [ ] API Gateway — ver seção 1 (hoje só cobre a Lambda).
 - [ ] Banco de Dados Gerenciado — ver 2.3 (não existe).
-- [~] Cluster Kubernetes **com escalabilidade** — o cluster (EKS) existe e o HPA de pods já está configurado
-  (`k8s/hpa.yaml`, 2–5 réplicas, CPU 70%); o autoscaling de **nós** do cluster (Cluster Autoscaler/Karpenter)
-  não está configurado no Terraform do EKS. **Decisão em aberto**: se o HPA de pods já atende ao requisito, ou
-  se autoscaling de nós também é esperado.
+- [x] Cluster Kubernetes **com escalabilidade** — o cluster (EKS) existe e o HPA de pods já está configurado
+  (`k8s/hpa.yaml`, 1–5 réplicas, CPU 20% — valor confirmado como intencional em 2026-09-26, README ajustado
+  para refletir o YAML real); autoscaling de **nós** do cluster (Cluster Autoscaler/Karpenter) decidido como
+  **fora de escopo** (custo — nós EC2 não são elegíveis a free tier), decisão já fechada — ver
+  `POST-TECH/FASE-3/plans/00-decisoes-tecnicas.md`.
 - [x] Terraform para provisionamento — parcial: Lambda e EKS/ECR feitos; banco gerenciado pendente (2.3).
 
 ---
@@ -295,6 +310,20 @@ grupo — não é uma recomendação, é só o ponto de partida da conversa.
 >
 > ✅ **Banco: decidido (provável) — PostgreSQL via Amazon RDS** (ver item 2 abaixo). Falta só confirmar na
 > prática que o custo real cabe no crédito do lab antes de dar como 100% fechado.
+>
+> ✅ **Observabilidade: decidido — New Relic** (confirmado em 2026-09-26, ver item 3 abaixo).
+>
+> ✅ **Homolog/produção: decidido — namespaces separados no mesmo cluster EKS** (confirmado em 2026-09-26,
+> ver item 4 abaixo).
+>
+> ✅ **Autoscaling de nós: decidido — somente HPA de pods, sem Cluster Autoscaler/Karpenter** (confirmado em
+> 2026-09-26, ver item 6 abaixo).
+>
+> ✅ **Backend do Terraform state: decidido — manter S3 + adicionar lock via DynamoDB** (confirmado em
+> 2026-09-26, ver item 5 abaixo).
+>
+> Registro completo dessas decisões e das consequências práticas em cada plano de execução:
+> `POST-TECH/FASE-3/plans/00-decisoes-tecnicas.md`.
 
 ### 1. API Gateway — Kong (ferramenta decidida); falta confirmar o escopo
 
@@ -327,7 +356,9 @@ Descartada: **Amazon Aurora** — custo bem mais alto que RDS mesmo no menor tam
 Serverless v2 tem um consumo mínimo cobrado por hora enquanto a instância existe); não cabe na restrição de
 "só free/crédito de estudante".
 
-### 3. Ferramenta de observabilidade
+### 3. Ferramenta de observabilidade — ✅ decidido
+
+**Decidido em 2026-09-26: New Relic.** Opções avaliadas antes da decisão, mantidas como histórico:
 
 - **Datadog** — tem um plano free permanente, mas limitado (poucos hosts, retenção de log curta, APM/infra
   restritos); costuma pedir cartão de crédito mesmo pro trial dos planos pagos, o que exige atenção pra não
@@ -338,7 +369,10 @@ Serverless v2 tem um consumo mínimo cobrado por hora enquanto a instância exis
 - O enunciado restringe a essas duas opções — vale o grupo conferir as condições atuais de cada free tier
   antes de decidir, porque esses planos mudam com frequência.
 
-### 4. Estratégia de homologação/produção
+### 4. Estratégia de homologação/produção — ✅ decidido
+
+**Decidido em 2026-09-26: namespaces separados no mesmo cluster EKS.** Opções avaliadas antes da decisão,
+mantidas como histórico:
 
 - **Namespaces separados no mesmo cluster EKS** (`homolog`/`prod`), cada branch fazendo deploy no namespace
   correspondente — a única opção realista dentro da restrição de custo: usa o cluster único que já existe, sem
@@ -350,7 +384,10 @@ Serverless v2 tem um consumo mínimo cobrado por hora enquanto a instância exis
 - **Contas AWS separadas por ambiente** — isolamento máximo, mas overhead alto e provavelmente incompatível com
   a estrutura de uma única conta de AWS Academy Learner Lab por grupo/aluno.
 
-### 5. Backend do state do Terraform (`oficina-mvp-infra-iac`)
+### 5. Backend do state do Terraform (`oficina-mvp-infra-iac`) — ✅ decidido
+
+**Decidido em 2026-09-26: manter S3 + adicionar lock via DynamoDB.** Opções avaliadas antes da decisão,
+mantidas como histórico:
 
 - **Manter S3** + adicionar uma tabela DynamoDB para lock — ambos praticamente gratuitos nessa escala (o state
   é um arquivo pequeno no S3; o DynamoDB tem free tier permanente que cobre folgado uma tabela de lock). Essa é
@@ -360,9 +397,14 @@ Serverless v2 tem um consumo mínimo cobrado por hora enquanto a instância exis
   configuração (criar workspace, ajustar os workflows de CI para autenticar com o Terraform Cloud) do que sobre
   custo.
 
-### 6. Autoscaling de nós do cluster
+### 6. Autoscaling de nós do cluster — ✅ decidido
 
-- **Manter só o HPA de pods** já configurado (2–5 réplicas, CPU 70%) — nenhum recurso novo, custo zero
+**Decidido em 2026-09-26: manter só o HPA de pods** (`k8s/hpa.yaml`, 1–5 réplicas, CPU 20%) — nenhum recurso
+novo, custo zero adicional; a opção mais segura sob restrição de orçamento, já que não cria nós novos
+sozinha. Sem Cluster Autoscaler/Karpenter. Opções que foram avaliadas antes da decisão, mantidas aqui como
+histórico:
+
+- **Manter só o HPA de pods** já configurado — nenhum recurso novo, custo zero
   adicional; a opção mais segura sob restrição de orçamento, já que não cria nós novos sozinha.
 - **Adicionar o Cluster Autoscaler** — o controlador em si é gratuito, mas a função dele é subir **nós EC2
   novos automaticamente** quando falta capacidade — e instâncias EC2 (`t3.medium`, usadas no node group) não

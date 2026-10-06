@@ -33,7 +33,9 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/api/health", "/actuator/health").permitAll()
+                        // /actuator/health/** inclui /liveness e /readiness, usados pelas probes do Kubernetes
+                        // (k8s/app.yaml); só expõem UP/DOWN, sem detalhes (show-details no padrão "never")
+                        .requestMatchers("/api/auth/login", "/api/health", "/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
                         .requestMatchers(HttpMethod.GET, "/api/public/service-orders/{code}").hasRole("CUSTOMER")

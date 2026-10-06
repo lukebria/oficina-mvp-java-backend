@@ -70,6 +70,18 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- Observabilidade (Fase 3): tracing distribuído + métricas exportados via OTLP (New Relic aceita OTLP
+             nativamente). No Spring Boot 4 a auto-configuração de tracing/OpenTelemetry fica em módulos próprios
+             (spring-boot-micrometer-tracing-opentelemetry, spring-boot-opentelemetry); só as bibliotecas
+             (micrometer-tracing-bridge-otel, opentelemetry-exporter-otlp, micrometer-registry-otlp) não se ligam
+             sozinhas - a app não exportava nada. Este starter traz os módulos + as bibliotecas. Export inerte por
+             padrão (sampling 0, export de métricas desligado, ver application.yml). Ver plano 13
+             (POST-TECH/FASE-3/plans/13-otlp-spring-boot-4.md). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-opentelemetry</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>

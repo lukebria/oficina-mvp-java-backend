@@ -1,10 +1,50 @@
-# Oficina MVP Backend — Java 25 + Spring Boot 4
+# Oficina MVP Backend — Java 21 + Spring Boot 4
 
-Back-end monolítico para um MVP de **oficina mecânica**, desenvolvido com **Java 25**, **Spring Boot 4**, **Maven**, *
+Back-end monolítico para um MVP de **oficina mecânica**, desenvolvido com **Java 21**, **Spring Boot 4**, **Maven**, *
 *PostgreSQL**, **JPA/Hibernate**, **Flyway**, **Spring Security**, **JWT** e **Swagger/OpenAPI**.
+
+> Nota: o build (`pom.xml`, `java.version`/`release`) tem como alvo o **Java 21**. O `Dockerfile` usa imagens
+> `Java 25` só para compilar e rodar (JRE 25 executa bytecode compilado para o release 21 normalmente) — se isso
+> for intencional (antecipar upgrade de runtime), tudo certo; do contrário, considerar alinhar as imagens do
+> Dockerfile para Java 21 também.
 
 O projeto permite gerenciar clientes, veículos, catálogo de serviços, peças/insumos, ordens de serviço, orçamento
 automático, aprovação pelo cliente, histórico de status e relatório de tempo médio de execução.
+
+## Estado atual (Tech Challenge Fase 3, 2026-10-05)
+
+Este é o repositório 4/4 do desafio: a aplicação principal, que roda no **Amazon EKS** atrás do **Kong**, usa o
+**RDS PostgreSQL** e recebe clientes autenticados por CPF pela **Lambda** `oficina-auth-function`. Os outros
+repositórios: [`oficina-auth-function`](https://github.com/lukebria/oficina-auth-function) (1/4),
+[`oficina-mvp-infra-iac`](https://github.com/lukebria/oficina-mvp-infra-iac) (2/4, EKS/Kong) e
+[`oficina-mvp-infra-db`](https://github.com/lukebria/oficina-mvp-infra-db) (3/4, RDS).
+
+- ✅ **Validado em ambiente real** (04/10 e 05/10/2026): deploy pelo pipeline no EKS, conexão com o RDS, Swagger pelo
+  Kong, login admin, abertura de OS, autenticação por CPF (Lambda → JWT), rota pública protegida pelo Kong (401 sem
+  token / 200 com token), **HPA escalando de 1 para 5 réplicas** sob carga, alerta do New Relic disparando.
+- O ambiente **não fica ligado** (crédito limitado do AWS Academy): é recriado para testes e para a gravação do
+  vídeo. Passo a passo para subir/validar/derrubar: **runbook do projeto** (`runbook/RUNBOOK.md` no repositório
+  de specs, com scripts).
+- **Chave `DEPLOY_ENABLED`**: com `false` (padrão) os merges rodam só testes, Sonar e build; com `true` (ou
+  disparo manual) publicam no ECR e fazem o deploy. Ver [Via CI/CD](#via-cicd-automático).
+- Pendências conhecidas: ver [Pendências conhecidas](#pendências-conhecidas).
+
+### Como acessar (quando o ambiente estiver de pé)
+
+O endereço público é o **Load Balancer do Kong**, que muda a cada recriação:
+
+```bash
+aws eks update-kubeconfig --name oficina-mecnica-lab-cluster --region us-east-1
+kubectl get svc -n kong kong-kong-proxy      # EXTERNAL-IP = <DNS do Kong>
+```
+
+| O quê | Endereço |
+|---|---|
+| Swagger UI | `http://<DNS do Kong>/swagger-ui/index.html` |
+| Health | `http://<DNS do Kong>/api/health` |
+| Login admin (JWT administrativo) | `POST http://<DNS do Kong>/api/auth/login` com `admin@oficina.com` + `SEED_ADMIN_PASSWORD` |
+| Login do cliente por CPF (Lambda) | `POST <ApiEndpoint da Lambda>/authenticate` ([como obter](https://github.com/lukebria/oficina-auth-function#como-chamar-quando-o-ambiente-estiver-de-pé)) |
+| Rotas públicas do cliente (Kong valida o JWT) | `GET http://<DNS do Kong>/api/public/service-orders/<código>` |
 
 ## Sumário
 
@@ -27,13 +67,13 @@ automático, aprovação pelo cliente, histórico de status e relatório de temp
 - [Vídeo demonstrativo](#vídeo-demonstrativo)
 - [Documentação complementar](#documentação-complementar)
 - [Pontos de atenção](#pontos-de-atenção)
-- [Roadmap / TODO](#roadmap--todo)
+- [Pendências conhecidas](#pendências-conhecidas)
 
 ## Stack
 
 | Item                | Tecnologia                     |
 |---------------------|--------------------------------|
-| Linguagem           | Java 25                        |
+| Linguagem           | Java 21 (build); imagens Java 25 no Dockerfile |
 | Framework           | Spring Boot 4.0.6              |
 | Build               | Maven                          |
 | API                 | Spring WebMVC                  |
@@ -168,7 +208,7 @@ Cada módulo segue o esqueleto `domain` → `application` (`port/in`/`port/out`)
 ```mermaid
 flowchart LR
     subgraph GH["GitHub"]
-        REPO["oficina-mvp-java"]
+        REPO["oficina-mvp-java-backend"]
         GHA["GitHub Actions"]
         SECRETS[("GitHub Secrets")]
     end
@@ -177,9 +217,10 @@ flowchart LR
         ECR[("Amazon ECR<br/>oficina-mecnica-lab")]
         subgraph EKS["Amazon EKS Cluster"]
             KONGLB["Service kong-proxy<br/>(LoadBalancer, namespace kong)"]
-            ING["Ingress oficina-app-ingress<br/>(ingressClassName: kong)"]
+            ING["Ingress oficina-app-ingress<br/>(rotas gerais)"]
+            ING_PUB["Ingress oficina-app-public-ingress<br/>(/api/public/service-orders/**,<br/>plugin jwt - ADR-006)"]
             SVC["Service oficina-app-service<br/>(ClusterIP)"]
-            HPA{{"HPA oficina-app-hpa<br/>2–5 réplicas · CPU 70%"}}
+            HPA{{"HPA oficina-app-hpa<br/>1–5 réplicas · CPU 20%"}}
             subgraph Pods["Deployment oficina-app-deployment"]
                 POD1["Pod app"]
                 POD2["Pod app"]
@@ -187,19 +228,24 @@ flowchart LR
             end
             CM[("ConfigMap app-config")]
             SEC2[("Secret app-secrets")]
-            DBDEP["Deployment banco-deployment"]
-            DBSVC["Service banco-service"]
+            MS["metrics-server<br/>(kube-system, CPU p/ o HPA)"]
+            DBDEP["banco-deployment + banco-service<br/>(Postgres em pod, só fallback)"]
         end
+        RDS[("Amazon RDS PostgreSQL 16<br/>oficina-mvp-infra-db")]
     end
 
     INTERNET(("Internet")) --> KONGLB
-    KONGLB -->|"rotas do Ingress"| ING
+    KONGLB -->|"rotas gerais"| ING
+    KONGLB -->|"rotas públicas de OS"| ING_PUB
     ING --> SVC
+    ING_PUB --> SVC
     SVC --> Pods
     HPA -. escala .-> Pods
     CM --> Pods
     SEC2 --> Pods
-    Pods --> DBSVC --> DBDEP
+    Pods -->|"DB_HOST"| RDS
+    Pods -.->|"sem DB_HOST"| DBDEP
+    MS -. métricas .-> HPA
     GHA -->|"docker push"| ECR
     ECR -->|"docker pull"| Pods
     SECRETS --> GHA
@@ -211,11 +257,31 @@ flowchart LR
 > aponta pra ele. É um gateway distinto do usado pela `oficina-auth-function` (que tem seu próprio API Gateway
 > da AWS na frente da Lambda) — ver [Infraestrutura como código (Terraform)](#infraestrutura-como-código-terraform).
 
+### Homolog vs. produção (namespaces + host do Ingress)
+
+`homolog` e `master` fazem deploy nos namespaces `homolog`/`prod` (já provisionados via Terraform em
+`oficina-mvp-infra-iac/namespaces.tf`), no mesmo cluster/Kong — o pipeline (`app-deploy.yml`) escolhe o
+namespace pela branch de origem. Como os dois ambientes compartilham o mesmo Kong, o `Ingress` de cada um
+usa um **host diferente** (`homolog.oficina-mvp.local` / `prod.oficina-mvp.local`, substituído em
+`k8s/ingress.yaml` pelo pipeline) para o Kong conseguir rotear sem colisão.
+
+Em `homolog`, o host pode ser trocado pela GitHub Variable **`HOMOLOG_INGRESS_HOST`**: configurada com o DNS do
+LoadBalancer do Kong (`kubectl get svc -n kong kong-kong-proxy`), o ambiente responde direto nessa URL — é o
+que a Lambda de autenticação (`BACKEND_BASE_URL`) precisa, já que o `fetch` do Node não permite forçar o header
+`Host`. Como o DNS do LoadBalancer muda a cada recriação do cluster, a variable precisa ser atualizada junto.
+
+```bash
+# com HOMOLOG_INGRESS_HOST configurada
+curl http://<DNS-do-LoadBalancer-do-Kong>/api/health
+# sem a variable (host fictício)
+curl -H "Host: homolog.oficina-mvp.local" http://<DNS-do-LoadBalancer-do-Kong>/api/health
+```
+
 ## Como rodar localmente
 
 ### 1. Pré-requisitos
 
-- Java 25.
+- Java 21+ (JDK 25 também funciona — `release=21` no `pom.xml` cross-compila; é o que o Dockerfile usa).
 - Maven.
 - Docker e Docker Compose, caso queira subir o PostgreSQL localmente via container.
 
@@ -310,19 +376,30 @@ Os manifests ficam em [`/k8s`](k8s):
 | Arquivo              | Recursos                                                                                        |
 |-----------------------|--------------------------------------------------------------------------------------------------|
 | `config-secret.yaml`  | `ConfigMap app-config` + `Secret app-secrets` (credenciais de banco, JWT, admin seed e e-mail)   |
-| `banco.yaml`          | `Deployment banco-deployment` + `Service banco-service` (PostgreSQL)                             |
-| `app.yaml`            | `Deployment oficina-app-deployment` (com `resources.requests/limits`) + `Service` (ClusterIP)    |
-| `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (2 a 5 réplicas, CPU 70%)                               |
-| `ingress.yaml`        | `Ingress oficina-app-ingress` (`ingressClassName: kong`) — rota que o Kong usa pra encontrar o Service da app |
+| `banco.yaml`          | `Deployment banco-deployment` + `Service banco-service` (PostgreSQL em pod, **fallback** quando `DB_HOST` não está configurada; o banco real é o RDS) |
+| `app.yaml`            | `Deployment oficina-app-deployment` (com `resources.requests/limits` e probes `startup`/`readiness`/`liveness` no Actuator) + `Service` (ClusterIP) |
+| `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (1 a 5 réplicas, CPU 20%)                               |
+| `ingress.yaml`        | `Ingress oficina-app-ingress` (`ingressClassName: kong`) — rota geral que o Kong usa pra encontrar o Service da app |
+| `ingress-public.yaml` | `Ingress oficina-app-public-ingress` — só `/api/public/service-orders/**`, com o plugin `jwt` do Kong anexado (ADR-006) |
 
 > O `Service` da aplicação é `ClusterIP` — quem recebe tráfego externo é o `Service` do Kong (`kong-proxy`,
 > namespace `kong`), provisionado no repositório [`oficina-mvp-infra-iac`](https://github.com/lukebria/oficina-mvp-infra-iac).
 
 ### Via CI/CD (automático)
 
-A pipeline (`.github/workflows/app-deploy.yml`) aplica os manifests automaticamente a cada push em `main`/`master`,
-depois de rodar os testes, o SonarQube e o build/push da imagem Docker para o ECR — ver
-[Fluxo de deploy (CI/CD)](#diagramas).
+A pipeline (`.github/workflows/app-deploy.yml`) aplica os manifests automaticamente a cada push em `homolog`
+(namespace `homolog`) e `master` (namespace `prod`), depois de rodar os testes, o SonarQube e o build/push da
+imagem Docker para o ECR — ver [Fluxo de deploy (CI/CD)](#diagramas).
+
+**Chave de deploy — variable `DEPLOY_ENABLED`** (o crédito do AWS Academy é limitado; detalhe em
+`plans/10-chave-deploy-enabled.md` no repositório de specs):
+- `true` → em push para `homolog`/`master`, executa automaticamente o push no ECR e o deploy no EKS (deploy automático de homologação e
+  produção, como pede o enunciado).
+- `false` ou ausente → o pipeline roda só o que não depende da AWS e **pula** (*skipped*) o push no ECR e o deploy no EKS. É o estado
+  padrão fora de uma janela de deploy, para um merge não subir recursos pagos.
+- **Disparo manual** (*Actions → Run workflow*) ignora a chave: rodar pelo botão já é uma decisão explícita.
+- Ligar/desligar: *Settings → Secrets and variables → Actions → Variables → `DEPLOY_ENABLED`*.
+
 
 ### Manualmente (fora da pipeline)
 
@@ -339,10 +416,12 @@ kubectl apply -f k8s/ingress.yaml
 > `k8s/ingress.yaml` só tem efeito se o Kong (com o Ingress Controller habilitado) já estiver instalado no
 > cluster — ver `oficina-mvp-infra-iac`.
 
-> ⚠️ `k8s/config-secret.yaml` e `k8s/app.yaml` têm placeholders (`${DB_PASSWORD}`, `${JWT_SECRET}`,
+> ⚠️ `k8s/config-secret.yaml` e `k8s/app.yaml` têm placeholders (`${DB_HOST}`, `${DB_PASSWORD}`, `${JWT_SECRET}`,
 > `${SEED_ADMIN_PASSWORD}`, `${ECR_REPOSITORY_URL}`) que na pipeline são substituídos via `envsubst`/`sed` a partir de
-> GitHub Secrets antes do `apply`. Para aplicar manualmente, substitua esses valores você mesmo antes de rodar os
-> comandos acima.
+> GitHub Secrets/Variables antes do `apply`. Para aplicar manualmente, substitua esses valores você mesmo antes de
+> rodar os comandos acima. `DB_HOST` cai no fallback `banco-service` (Postgres em pod) enquanto a variável
+> `DB_HOST` não estiver configurada no GitHub — passa a apontar para o RDS (`oficina-mvp-infra-db`) só de trocar
+> essa variable, sem precisar editar YAML nem a pipeline.
 
 ## Infraestrutura como código (Terraform)
 
@@ -352,12 +431,13 @@ provisiona o cluster `oficina-mecnica-lab-cluster` e o ECR `oficina-mecnica-lab`
 Learner Lab** (credenciais temporárias com session token, role `LabRole` fixa do ambiente — sem IAM role
 própria).
 
-O banco de dados **não** é provisionado por Terraform em lugar nenhum hoje — ele roda como um `Deployment` comum
-de Postgres dentro do mesmo cluster (`k8s/banco.yaml`, neste repositório), sem backup nem alta disponibilidade.
-Ver [Roadmap / TODO](#roadmap--todo).
+O banco de dados é um **Amazon RDS PostgreSQL 16**, provisionado pelo repositório
+[`oficina-mvp-infra-db`](https://github.com/lukebria/oficina-mvp-infra-db). A aplicação o recebe pela variable
+`DB_HOST` (endpoint) e pelo secret `DB_PASSWORD` (senha do Secrets Manager), sem editar YAML. O
+`k8s/banco.yaml` (Postgres em pod) só é usado como **fallback**, quando `DB_HOST` não está configurada.
 
-Enquanto isso, a pipeline deste repositório assume que o cluster e o ECR **já existem** (ver
-`aws eks update-kubeconfig` em `.github/workflows/app-deploy.yml`).
+A pipeline deste repositório assume que o cluster, o ECR e o Kong **já existem** (ver
+`aws eks update-kubeconfig` em `.github/workflows/app-deploy.yml`): ordem de subida no runbook do projeto.
 
 ## Variáveis de ambiente
 
@@ -383,6 +463,15 @@ As variáveis estão documentadas no `.env.example` e são lidas pelo `applicati
 | `MAIL_USERNAME`          | *(vazio)*                                                      | Usuário/e-mail SMTP         |
 | `MAIL_PASSWORD`          | *(vazio)*                                                      | Senha de app do Gmail       |
 | `MAIL_FROM`              | `MAIL_USERNAME` ou `no-reply@oficina.com`                      | Remetente dos e-mails de notificação de status |
+| `NEW_RELIC_LICENSE_KEY`  | *(vazio)*                                                      | License Key (`INGEST - LICENSE`) do New Relic — header `api-key` do export OTLP |
+| `NEW_RELIC_OTLP_ENDPOINT` | `http://localhost:4318/v1/traces`                             | Endpoint OTLP de traces (New Relic US: `https://otlp.nr-data.net:4318/v1/traces`) |
+| `NEW_RELIC_OTLP_METRICS_ENDPOINT` | `http://localhost:4318/v1/metrics`                    | Endpoint OTLP das métricas de negócio (`BusinessMetrics`) |
+| `TRACING_SAMPLING_PROBABILITY` | `0` (nada é rastreado)                                   | Fração de requisições rastreadas (`1.0` = todas) |
+| `OTLP_METRICS_EXPORT_ENABLED` | `false`                                                   | Liga o export OTLP das métricas de negócio |
+
+No Kubernetes, as 5 variáveis de observabilidade vêm de GitHub Secret/Variables com os mesmos nomes, repassadas
+pelo pipeline (`app-deploy.yml`) via `k8s/config-secret.yaml`. Sem elas, o pipeline usa os defaults acima
+(inertes: nada é exportado).
 
 >
 > ```yaml
@@ -481,12 +570,17 @@ Esse token **não é emitido por este backend** — é emitido por uma Function 
    confirmar que o cliente existe e está `ACTIVE` — resposta traz `status`: `ACTIVE`, `INACTIVE` ou `NOT_FOUND`
    (quando o documento não corresponde a nenhum cliente);
 3. assina um JWT com `CUSTOMER_JWT_SECRET` (segredo dedicado, diferente do `JWT_SECRET` administrativo), claims
-   `sub` = documento normalizado (só dígitos) e `role` = `"CUSTOMER"`.
+   `sub` = documento normalizado (só dígitos), `role` = `"CUSTOMER"` e `iss` (identifica o consumer no Kong).
 
 O documento do cliente autenticado vem sempre do token (nunca de um parâmetro de request) — por isso o token só
 permite consultar/aprovar a OS do próprio CPF, mesmo que o cliente tente informar outro código. Além disso,
 `JwtAuthenticationFilter` revalida o status do cliente **a cada request**: se o cliente for marcado `INACTIVE`
 depois de o token ter sido emitido, esse token para de autenticar imediatamente, sem esperar expirar.
+
+**Validação em duas camadas (ADR-006)**: essas duas rotas ficam atrás de um `Ingress` dedicado
+(`k8s/ingress-public.yaml`) com o plugin `jwt` do Kong — o Kong já rejeita (`401`) um token com assinatura
+inválida ou expirado antes da requisição chegar aqui. A aplicação **continua validando o token normalmente**
+(nada mudou em `JwtAuthenticationFilter`/`JwtService`) — é defesa em profundidade, não substituição.
 
 ### Testando o fluxo público localmente (com a Function)
 
@@ -944,6 +1038,18 @@ Swagger UI (local): http://localhost:3000/swagger-ui.html
 OpenAPI JSON (local): http://localhost:3000/v3/api-docs
 ```
 
+Também há uma **collection Postman** em [`docs/pilot-collection.postman_collection.json`](docs/pilot-collection.postman_collection.json)
+(ver também [`docs/pilot-script.md`](docs/pilot-script.md) para o roteiro de uso).
+
+**Ambiente publicado**: o Swagger fica em `http://<DNS do Kong>/swagger-ui/index.html` quando o ambiente está de
+pé. O endereço muda a cada recriação (ambiente de lab com crédito limitado, ligado só para testes e para a
+gravação); ver [Como acessar](#como-acessar-quando-o-ambiente-estiver-de-pé).
+
+## Vídeo demonstrativo
+
+_Link do vídeo (YouTube/Vimeo, até 15 min) a ser adicionado depois da gravação._ Roteiro:
+`roteiro-video-demonstracao.md` no repositório de specs do projeto.
+
 ## Documentação complementar
 
 Arquivos importantes:
@@ -970,7 +1076,21 @@ Mapeamento da implementação Java/Spring atual.
 docs/MER.drawio
 ```
 
-Modelo entidade-relacionamento visual do banco.
+Modelo entidade-relacionamento visual do banco (versão textual/atualizada em `docs/architecture.md`, seção 16.2).
+
+```txt
+docs/architecture/rfcs/  e  docs/architecture/adrs/
+```
+
+RFCs (escolha da nuvem, do banco, estratégia de autenticação) e ADRs (comunicação síncrona Lambda↔backend, HPA
+sem autoscaling de nós, Kong como API Gateway, namespaces homolog/prod, backend do Terraform state, validação do
+JWT no Kong) — índice completo em `docs/architecture.md`, seção 17.
+
+```txt
+docs/observability/
+```
+
+Dashboards e alertas do New Relic (definição versionada em JSON + explicação de cada painel/alerta).
 
 [github.com/lukebria/oficina-auth-function](https://github.com/lukebria/oficina-auth-function)
 
@@ -1007,27 +1127,20 @@ Function Serverless (Node/TypeScript) que emite o JWT do fluxo público de clien
   corresponde a nenhum cliente. Um cliente `INACTIVE` não é bloqueado de nada no fluxo administrativo (CRUD, OS
   criada/gerenciada pela equipe da oficina) — só de autenticar no fluxo público via CPF.
 
-## Roadmap / TODO
+## Pendências conhecidas
 
-**Organizar o projeto em quatro repositórios separados, cada um com CI/CD próprio (GitHub Actions, GitLab CI etc.)
-e deploy automático para a nuvem:**
+Os 4 repositórios exigidos pelo enunciado existem, com CI/CD e deploy automático (ver [Estado atual](#estado-atual-tech-challenge-fase-3-2026-10-05)).
+O que ainda falta, em ordem (acompanhamento detalhado em `STATUS-PROJETO-EQUIPE.md` no repositório de specs):
 
-1. **Lambda (Function Serverless)** — já é o repositório [`oficina-auth-function`](https://github.com/lukebria/oficina-auth-function), mas
-   ainda sem pipeline: o deploy hoje é um `terraform apply` manual (ver [Deploy (Terraform)](https://github.com/lukebria/oficina-auth-function#deploy-terraform)
-   e a lista de configuração pendente lá).
-2. **Infraestrutura Kubernetes (Terraform)** — **já existe**, no repositório
-   [`oficina-mvp-infra-iac`](https://github.com/lukebria/oficina-mvp-infra-iac) (provisiona EKS + ECR numa conta
-   de AWS Academy Learner Lab). Já tem pipeline (`create_iac.yml`/`destroy_iac.yml`), mas os gatilhos de
-   PR/push apontam para uma branch `main-disabled` — hoje só roda via disparo manual; falta reativar o gatilho
-   automático (se for essa a intenção) e adicionar lock de state (DynamoDB).
-3. **Infraestrutura do Banco de Dados Gerenciado (Terraform)** — **hoje não existe em lugar nenhum**: o Postgres
-   roda como um `Deployment` comum dentro do mesmo cluster EKS (`k8s/banco.yaml`, imagem `postgres:15-alpine`,
-   sem backup/HA), versionado neste mesmo repositório — não é provisionado nem pelo Terraform deste repositório
-   nem pelo `oficina-mvp-infra-iac`. Precisa virar um banco gerenciado (ex: RDS) provisionado por Terraform em
-   seu próprio repositório, com backup e alta disponibilidade de verdade.
-4. **Aplicação principal rodando em Kubernetes** — é este repositório (`oficina-mvp-java`) hoje: código da API +
-   manifests de deploy da aplicação (`k8s/app.yaml`, `k8s/hpa.yaml`, `k8s/config-secret.yaml`) + pipeline
-   (`.github/workflows/app-deploy.yml`) que já builda, testa, escaneia (SonarQube) e publica a imagem. Ficaria
-   restrito a só isso, sem `k8s/banco.yaml`, depois que o item 3 for extraído.
+1. **Traces e métricas da aplicação no New Relic**: ~~a app não exportava nada via OTLP~~ **corrigido** (plano 13:
+   `spring-boot-starter-opentelemetry` + propriedades do Spring Boot 4 + `trace.id` nos logs). Testado com a app
+   local enviando direto ao New Relic (spans, latência e as 3 métricas de negócio chegaram); falta só confirmar no
+   cluster na próxima janela de deploy.
+2. **Probes de saúde**: ~~sem `readinessProbe`, o Kong mandava tráfego para pods ainda subindo (`502`)~~ **corrigido**
+   (plano 14: probes `startup`/`readiness`/`liveness` + `/actuator/health/**` liberado no Spring Security). Falta
+   confirmar no cluster: sem `502` no deploy e na escala.
+3. **Pico do HPA na inicialização**: com a `readinessProbe`, o HPA passa a descartar a CPU de pods ainda não prontos,
+   então o pico da subida da JVM deve deixar de levá-lo a 5 réplicas. Confirmar no cluster; se persistir, adicionar
+   janela de estabilização no `hpa.yaml`.
+4. Remover `k8s/banco.yaml` (Postgres em pod), hoje só fallback.
 
-Nenhum desses quatro pontos está implementado como planejado ainda — fica registrado aqui como direção futura.

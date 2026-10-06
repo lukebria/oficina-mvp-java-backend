@@ -1,0 +1,346 @@
+{
+  "name": "Oficina MVP - Tech Challenge Fase 3",
+  "description": "Dashboards de negocio exigidos pelo enunciado (volume diario de OS, tempo medio por status, erros de integracao) + operacao (latencia, K8s, uptime, logs). Fonte: docs/observability no repo oficina-mvp-java-backend.",
+  "permissions": "PUBLIC_READ_ONLY",
+  "pages": [
+    {
+      "name": "Negócio",
+      "widgets": [
+        {
+          "title": "OS criadas hoje",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 3,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM Metric SELECT sum(service_order.created) AS 'OS criadas' SINCE today"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Volume diário de ordens de serviço",
+          "layout": {
+            "column": 4,
+            "row": 1,
+            "width": 9,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM Metric SELECT sum(service_order.created) AS 'OS criadas' TIMESERIES 1 day SINCE 30 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Tempo médio por status (ms) — Diagnóstico, Execução, Finalização",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM Metric SELECT average(service_order.status.duration) AS 'tempo medio' FACET status SINCE 30 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Tempo médio por status ao longo do tempo",
+          "layout": {
+            "column": 7,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM Metric SELECT average(service_order.status.duration) FACET status TIMESERIES 1 day SINCE 30 days ago"
+              }
+            ],
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Falhas de integração por tipo",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM Metric SELECT sum(integration.failure) FACET integration TIMESERIES 1 hour SINCE 7 days ago"
+              }
+            ],
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Erros 5xx por endpoint",
+          "layout": {
+            "column": 7,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM Span SELECT count(*) WHERE service.name = 'oficina-mvp-backend' AND outcome = 'SERVER_ERROR' FACET name SINCE 7 days ago"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Operação",
+      "widgets": [
+        {
+          "title": "Latência das APIs p50/p95 (ms)",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM Span SELECT percentile(duration.ms, 50, 95) WHERE service.name = 'oficina-mvp-backend' AND span.kind = 'server' TIMESERIES SINCE 3 hours ago"
+              }
+            ],
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Latência média por endpoint (ms)",
+          "layout": {
+            "column": 7,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM Span SELECT average(duration.ms) WHERE service.name = 'oficina-mvp-backend' AND span.kind = 'server' FACET name SINCE 3 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Throughput (req/min)",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 4,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM Span SELECT rate(count(*), 1 minute) WHERE service.name = 'oficina-mvp-backend' AND span.kind = 'server' TIMESERIES SINCE 3 hours ago"
+              }
+            ],
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "CPU por pod (cores)",
+          "layout": {
+            "column": 5,
+            "row": 4,
+            "width": 4,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM K8sContainerSample SELECT average(cpuUsedCores) WHERE clusterName = 'oficina-mecnica-lab-cluster' FACET podName TIMESERIES SINCE 3 hours ago"
+              }
+            ],
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Memória por pod (MB)",
+          "layout": {
+            "column": 9,
+            "row": 4,
+            "width": 4,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM K8sContainerSample SELECT average(memoryWorkingSetBytes) / 1e6 WHERE clusterName = 'oficina-mecnica-lab-cluster' FACET podName TIMESERIES SINCE 3 hours ago"
+              }
+            ],
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Healthcheck / uptime: pods disponíveis",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM K8sDeploymentSample SELECT latest(podsAvailable) AS 'disponiveis', latest(podsDesired) AS 'desejados' WHERE clusterName = 'oficina-mecnica-lab-cluster' FACET namespaceName, deploymentName SINCE 10 minutes ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Réplicas do HPA",
+          "layout": {
+            "column": 7,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM K8sHpaSample SELECT latest(currentReplicas) AS 'atuais', latest(desiredReplicas) AS 'desejadas' WHERE clusterName = 'oficina-mecnica-lab-cluster' TIMESERIES SINCE 3 hours ago"
+              }
+            ],
+            "legend": {
+              "enabled": true
+            }
+          }
+        },
+        {
+          "title": "Logs da aplicação (JSON, correlacionados por trace.id)",
+          "layout": {
+            "column": 1,
+            "row": 10,
+            "width": 12,
+            "height": 4
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountIds": [
+                  8558465
+                ],
+                "query": "FROM Log SELECT timestamp, log.level, message, trace.id WHERE service.name = 'oficina-mvp-backend' OR namespace_name = 'homolog' SINCE 1 hour ago LIMIT 100"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

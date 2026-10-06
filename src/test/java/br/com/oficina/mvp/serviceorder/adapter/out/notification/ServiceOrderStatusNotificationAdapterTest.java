@@ -2,6 +2,7 @@ package br.com.oficina.mvp.serviceorder.adapter.out.notification;
 
 import br.com.oficina.mvp.customer.domain.Customer;
 import br.com.oficina.mvp.serviceorder.domain.ServiceOrder;
+import br.com.oficina.mvp.shared.observability.BusinessMetrics;
 import br.com.oficina.mvp.vehicle.domain.Vehicle;
 import org.junit.jupiter.api.Test;
 import org.springframework.mail.MailSendException;
@@ -18,8 +19,9 @@ import static org.mockito.Mockito.verify;
 class ServiceOrderStatusNotificationAdapterTest {
 
     private final JavaMailSender mailSender = mock(JavaMailSender.class);
+    private final BusinessMetrics metrics = mock(BusinessMetrics.class);
     private final ServiceOrderStatusNotificationAdapter adapter =
-            new ServiceOrderStatusNotificationAdapter(mailSender, "no-reply@oficina.com");
+            new ServiceOrderStatusNotificationAdapter(mailSender, "no-reply@oficina.com", metrics);
 
     @Test
     void shouldSendEmailWhenCustomerHasEmail() {
@@ -51,5 +53,7 @@ class ServiceOrderStatusNotificationAdapterTest {
         willThrow(new MailSendException("erro simulado")).given(mailSender).send(any(SimpleMailMessage.class));
 
         assertThatCode(() -> adapter.notifyStatusChanged(order)).doesNotThrowAnyException();
+
+        verify(metrics).recordIntegrationFailure("email");
     }
 }

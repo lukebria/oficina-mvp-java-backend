@@ -29,6 +29,31 @@ spec:
             limits:
               cpu: "500m"      # Máximo de 0.5 de CPU
               memory: "512Mi"  # Limite máximo de RAM
+          # =========================================================
+          # PROBES DE SAÚDE (plano 14) - endpoints do Spring Boot Actuator
+          # =========================================================
+          # Sem elas o pod era considerado pronto assim que o container iniciava, mas o Spring leva ~60 s para
+          # subir: o Kong mandava tráfego antes da hora (502 a cada deploy/escala) e o pico de CPU da subida da
+          # JVM entrava na conta do HPA (ia a 5 réplicas a cada deploy). Com a readiness, o HPA descarta a CPU de
+          # pods ainda não prontos.
+          startupProbe:          # até ~150 s para subir, sem a liveness reiniciar o pod no meio
+            httpGet:
+              path: /actuator/health/liveness
+              port: 3000
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:        # só recebe tráfego (Service/Kong) quando a aplicação está pronta
+            httpGet:
+              path: /actuator/health/readiness
+              port: 3000
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:         # reinicia o pod se a aplicação travar
+            httpGet:
+              path: /actuator/health/liveness
+              port: 3000
+            periodSeconds: 10
+            failureThreshold: 3
           env:
             - name: APP_PORT
               valueFrom:
@@ -120,6 +145,31 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: MAIL_PORT
+            - name: NEW_RELIC_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NEW_RELIC_OTLP_ENDPOINT
+            - name: NEW_RELIC_OTLP_METRICS_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: NEW_RELIC_OTLP_METRICS_ENDPOINT
+            - name: TRACING_SAMPLING_PROBABILITY
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: TRACING_SAMPLING_PROBABILITY
+            - name: OTLP_METRICS_EXPORT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: OTLP_METRICS_EXPORT_ENABLED
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: NEW_RELIC_LICENSE_KEY
 ---
 # yaml-language-server: $schema=https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.28.0/service-v1.json
 apiVersion: v1
