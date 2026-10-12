@@ -1048,6 +1048,8 @@ _Link do vídeo (YouTube/Vimeo, até 15 min) a ser adicionado depois da gravaç�
 
 ## Documentação complementar
 
+**Diagramas de arquitetura (PNG, com legendas para o documento de entrega)**: [`docs/diagramas/`](docs/diagramas/).
+
 Arquivos importantes:
 
 ```txt

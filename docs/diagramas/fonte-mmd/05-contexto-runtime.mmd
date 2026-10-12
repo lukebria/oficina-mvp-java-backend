@@ -1,0 +1,6 @@
+flowchart LR
+  Staff[Equipe da oficina<br/>JWT] --> API[Oficina MVP API<br/>Spring Boot :3000]
+  Cliente[Cliente<br/>fluxo público] --> API
+  API --> PG[(PostgreSQL)]
+  API --> SMTP[SMTP / e-mail]
+  API -.-> SW[Swagger / Actuator]
