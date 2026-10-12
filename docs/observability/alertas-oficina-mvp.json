@@ -22,8 +22,8 @@
       },
       "signal": {
         "aggregationWindow": 60,
-        "aggregationMethod": "EVENT_FLOW",
-        "aggregationDelay": 120
+        "aggregationMethod": "EVENT_TIMER",
+        "aggregationTimer": 60
       },
       "terms": [
         {
@@ -45,8 +45,8 @@
       },
       "signal": {
         "aggregationWindow": 60,
-        "aggregationMethod": "EVENT_FLOW",
-        "aggregationDelay": 120
+        "aggregationMethod": "EVENT_TIMER",
+        "aggregationTimer": 60
       },
       "terms": [
         {
@@ -82,5 +82,8 @@
       ],
       "violationTimeLimitSeconds": 86400
     }
+  ],
+  "notas": [
+    "2026-10-12: condições de falha (OS e integração) em EVENT_TIMER (timer 60 s). Com EVENT_FLOW, sinal esparso (só erros) nunca fechava a janela e o alerta não era avaliado."
   ]
 }
