@@ -185,6 +185,15 @@ jobs:
         run: |
           kubectl create namespace ${{ steps.env.outputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
 
+      # Plano 17: o banco é só o RDS (sem Postgres em pod). Sem DB_HOST a app subiria apontando para um banco que não
+      # existe - falha aqui, com a instrução, em vez de deixar os pods em CrashLoopBackOff.
+      - name: Check DB_HOST (RDS)
+        run: |
+          if [ -z "${{ vars.DB_HOST }}" ]; then
+            echo "::error::Variable DB_HOST vazia. Suba o oficina-mvp-infra-db e rode runbook/scripts/wire-endpoints.js rds."
+            exit 1
+          fi
+
       - name: Substitute Secrets and Image URL & Apply K8s Manifests
         env:
           ECR_REGISTRY: ${{ needs.push.outputs.ecr_registry }}
@@ -194,9 +203,8 @@ jobs:
           NAMESPACE: ${{ steps.env.outputs.namespace }}
           INGRESS_HOST: ${{ steps.env.outputs.ingress_host }}
           # Mapeamento dos GitHub Secrets para variáveis do ambiente de execução
-          # DB_HOST: enquanto a variável DB_HOST não for configurada (RDS ainda não existe), cai no fallback
-          # "banco-service" (Postgres em pod) - ver plans/01-infra-db-novo-repo.md.
-          DB_HOST: ${{ vars.DB_HOST || 'banco-service' }}
+          # DB_HOST: endpoint do RDS (oficina-mvp-infra-db), gravado pelo runbook/scripts/wire-endpoints.js rds
+          DB_HOST: ${{ vars.DB_HOST }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           CUSTOMER_JWT_SECRET: ${{ secrets.CUSTOMER_JWT_SECRET }}
@@ -230,7 +238,6 @@ jobs:
 
           # 4. Aplica os manifestos no namespace de destino (homolog ou prod)
           kubectl apply -n "$NAMESPACE" -f k8s/config-secret.yaml
-          kubectl apply -n "$NAMESPACE" -f k8s/banco.yaml
           kubectl apply -n "$NAMESPACE" -f k8s/app.yaml
           kubectl apply -n "$NAMESPACE" -f k8s/hpa.yaml
           kubectl apply -n "$NAMESPACE" -f k8s/ingress.yaml

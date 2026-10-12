@@ -11,7 +11,7 @@ Back-end monolítico para um MVP de **oficina mecânica**, desenvolvido com **Ja
 O projeto permite gerenciar clientes, veículos, catálogo de serviços, peças/insumos, ordens de serviço, orçamento
 automático, aprovação pelo cliente, histórico de status e relatório de tempo médio de execução.
 
-## Estado atual (Tech Challenge Fase 3, 2026-10-05)
+## Estado atual (Tech Challenge Fase 3, 2026-10-12)
 
 Este é o repositório 4/4 do desafio: a aplicação principal, que roda no **Amazon EKS** atrás do **Kong**, usa o
 **RDS PostgreSQL** e recebe clientes autenticados por CPF pela **Lambda** `oficina-auth-function`. Os outros
@@ -22,6 +22,9 @@ repositórios: [`oficina-auth-function`](https://github.com/lukebria/oficina-aut
 - ✅ **Validado em ambiente real** (04/10 e 05/10/2026): deploy pelo pipeline no EKS, conexão com o RDS, Swagger pelo
   Kong, login admin, abertura de OS, autenticação por CPF (Lambda → JWT), rota pública protegida pelo Kong (401 sem
   token / 200 com token), **HPA escalando de 1 para 5 réplicas** sob carga, alerta do New Relic disparando.
+- ✅ **Revalidado em 12/10/2026** (namespace `prod`, deploy a partir de `master`): teste ponta a ponta 10/10; traces,
+  latência, métricas de negócio e logs com `trace.id` no New Relic; probes sem `502` no deploy, na troca de pods e na
+  escala; HPA sem pico na inicialização (janela de 120 s) e escalando sob carga.
 - O ambiente **não fica ligado** (crédito limitado do AWS Academy): é recriado para testes e para a gravação do
   vídeo. Passo a passo para subir/validar/derrubar: **runbook do projeto** (`runbook/RUNBOOK.md` no repositório
   de specs, com scripts).
@@ -229,7 +232,6 @@ flowchart LR
             CM[("ConfigMap app-config")]
             SEC2[("Secret app-secrets")]
             MS["metrics-server<br/>(kube-system, CPU p/ o HPA)"]
-            DBDEP["banco-deployment + banco-service<br/>(Postgres em pod, só fallback)"]
         end
         RDS[("Amazon RDS PostgreSQL 16<br/>oficina-mvp-infra-db")]
     end
@@ -244,7 +246,6 @@ flowchart LR
     CM --> Pods
     SEC2 --> Pods
     Pods -->|"DB_HOST"| RDS
-    Pods -.->|"sem DB_HOST"| DBDEP
     MS -. métricas .-> HPA
     GHA -->|"docker push"| ECR
     ECR -->|"docker pull"| Pods
@@ -380,7 +381,6 @@ Os manifests ficam em [`/k8s`](k8s):
 | Arquivo              | Recursos                                                                                        |
 |-----------------------|--------------------------------------------------------------------------------------------------|
 | `config-secret.yaml`  | `ConfigMap app-config` + `Secret app-secrets` (credenciais de banco, JWT, admin seed e e-mail)   |
-| `banco.yaml`          | `Deployment banco-deployment` + `Service banco-service` (PostgreSQL em pod, **fallback** quando `DB_HOST` não está configurada; o banco real é o RDS) |
 | `app.yaml`            | `Deployment oficina-app-deployment` (imagem com a tag do commit, sem `replicas` fixo — o HPA decide; `resources.requests/limits` e probes `startup`/`readiness`/`liveness` no Actuator) + `Service` (ClusterIP) |
 | `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (1 a 5 réplicas, CPU 20%, sobe após 2 min acima do alvo)  |
 | `ingress.yaml`        | `Ingress oficina-app-ingress` (`ingressClassName: kong`) — rota geral que o Kong usa pra encontrar o Service da app |
@@ -413,7 +413,6 @@ Pré-requisito: um cluster Kubernetes acessível via `kubectl` (local, como kind
 
 ```bash
 kubectl apply -f k8s/config-secret.yaml
-kubectl apply -f k8s/banco.yaml
 kubectl apply -f k8s/app.yaml
 kubectl apply -f k8s/hpa.yaml
 kubectl apply -f k8s/ingress.yaml
@@ -425,9 +424,8 @@ kubectl apply -f k8s/ingress.yaml
 > ⚠️ `k8s/config-secret.yaml` e `k8s/app.yaml` têm placeholders (`${DB_HOST}`, `${DB_PASSWORD}`, `${JWT_SECRET}`,
 > `${SEED_ADMIN_PASSWORD}`, `${ECR_REPOSITORY_URL}`, `${IMAGE_TAG}`) que na pipeline são substituídos via `envsubst`/`sed` a partir de
 > GitHub Secrets/Variables antes do `apply`. Para aplicar manualmente, substitua esses valores você mesmo antes de
-> rodar os comandos acima. `DB_HOST` cai no fallback `banco-service` (Postgres em pod) enquanto a variável
-> `DB_HOST` não estiver configurada no GitHub — passa a apontar para o RDS (`oficina-mvp-infra-db`) só de trocar
-> essa variable, sem precisar editar YAML nem a pipeline.
+> rodar os comandos acima. `DB_HOST` é o endpoint do RDS
+> (`oficina-mvp-infra-db`); sem essa variable o pipeline para no passo *Check DB_HOST*.
 
 ## Infraestrutura como código (Terraform)
 
@@ -439,8 +437,8 @@ própria).
 
 O banco de dados é um **Amazon RDS PostgreSQL 16**, provisionado pelo repositório
 [`oficina-mvp-infra-db`](https://github.com/lukebria/oficina-mvp-infra-db). A aplicação o recebe pela variable
-`DB_HOST` (endpoint) e pelo secret `DB_PASSWORD` (senha do Secrets Manager), sem editar YAML. O
-`k8s/banco.yaml` (Postgres em pod) só é usado como **fallback**, quando `DB_HOST` não está configurada.
+`DB_HOST` (endpoint) e pelo secret `DB_PASSWORD` (senha do Secrets Manager), sem editar YAML. Não há banco
+dentro do cluster: o antigo Postgres em pod (`k8s/banco.yaml`) foi removido em 12/10 (plano 17).
 
 A pipeline deste repositório assume que o cluster, o ECR e o Kong **já existem** (ver
 `aws eks update-kubeconfig` em `.github/workflows/app-deploy.yml`): ordem de subida no runbook do projeto.
@@ -1135,18 +1133,14 @@ Function Serverless (Node/TypeScript) que emite o JWT do fluxo público de clien
 
 ## Pendências conhecidas
 
-Os 4 repositórios exigidos pelo enunciado existem, com CI/CD e deploy automático (ver [Estado atual](#estado-atual-tech-challenge-fase-3-2026-10-05)).
+Os 4 repositórios exigidos pelo enunciado existem, com CI/CD e deploy automático (ver [Estado atual](#estado-atual-tech-challenge-fase-3-2026-10-12)).
 O que ainda falta, em ordem (acompanhamento detalhado em `STATUS-PROJETO-EQUIPE.md` no repositório de specs):
 
-1. **Traces e métricas da aplicação no New Relic**: ~~a app não exportava nada via OTLP~~ **corrigido** (plano 13:
-   `spring-boot-starter-opentelemetry` + propriedades do Spring Boot 4 + `trace.id` nos logs). Testado com a app
-   local enviando direto ao New Relic (spans, latência e as 3 métricas de negócio chegaram); falta só confirmar no
-   cluster na próxima janela de deploy.
-2. **Probes de saúde**: ~~sem `readinessProbe`, o Kong mandava tráfego para pods ainda subindo (`502`)~~ **corrigido**
-   (plano 14: probes `startup`/`readiness`/`liveness` + `/actuator/health/**` liberado no Spring Security). Falta
-   confirmar no cluster: sem `502` no deploy e na escala.
-3. **Pico do HPA na inicialização**: a `readinessProbe` não bastou (no cluster, em 12/10, o HPA foi a 5 réplicas
-   ~1 min depois do deploy, com a JVM ainda aquecendo). O `hpa.yaml` ganhou `behavior.scaleUp.stabilizationWindowSeconds:
-   120`: só escala com CPU acima do alvo por 2 min seguidos. Confirmar no cluster.
-4. Remover `k8s/banco.yaml` (Postgres em pod), hoje só fallback.
+Resolvido e confirmado no cluster em 12/10: traces/métricas no New Relic (plano 13), probes sem `502` (plano 14),
+pico do HPA na inicialização (janela de 120 s), Postgres em pod removido (plano 17).
+
+1. **Confirmar no cluster** na janela de gravação do vídeo:
+   - deploy com mudança visível troca os pods (imagem pela tag do commit + `rollout status`, plano 16);
+   - alerta "falha no processamento de OS" disparando;
+   - widgets "tempo médio por status" e "erros de integração" com dados (o teste ponta a ponta só abre OS).
 
