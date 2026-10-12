@@ -969,7 +969,7 @@ Pontos que este diagrama deixa explícitos e que não apareciam nos diagramas fr
 - **Namespaces `homolog`/`prod`** compartilhando o mesmo cluster/Kong (ADR-004), diferenciados por `host` no
   `Ingress` (ver `oficina-mvp-java-backend/k8s/ingress.yaml`).
 - **RDS aplicado e validado** (04/10 e 05/10/2026): a aplicação conecta pelo `DB_HOST` (endpoint do RDS) e pela
-  senha do Secrets Manager. O Postgres em pod (`k8s/banco.yaml`) ficou só como fallback.
+  senha do Secrets Manager. O Postgres em pod (`k8s/banco.yaml`), que ficou como fallback, foi removido em 12/10.
 - **New Relic**: CPU/memória, pods, HPA e logs JSON do cluster chegam pelo `nri-bundle` (validado no ensaio geral;
   alerta "aplicação indisponível" disparou por e-mail). Traces e métricas de negócio da aplicação vão por OTLP:
   corrigidos para o Spring Boot 4 no plano 13 e validados com a aplicação enviando ao New Relic (spans, latência e

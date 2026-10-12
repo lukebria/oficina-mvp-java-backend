@@ -67,5 +67,5 @@ disponibilidade nativa, e sem nenhuma linha de Terraform.
   major, a AWS escolhe a minor default (16.13 no teste).
 - **Banco/usuário** alinhados com a aplicação (`oficina_mvp`/`oficina`). A aplicação conectou, rodou as migrations
   do Flyway e atendeu o fluxo completo.
-- **Migração**: não foi preciso migrar dados (ambiente criado do zero). O `k8s/banco.yaml` segue como fallback,
-  usado só quando `DB_HOST` não está configurada.
+- **Migração**: não foi preciso migrar dados (ambiente criado do zero). O `k8s/banco.yaml` ficou como fallback até
+  12/10/2026, quando foi removido (o pipeline passou a exigir `DB_HOST`).
