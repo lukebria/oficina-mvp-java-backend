@@ -26,8 +26,7 @@ repositórios: [`oficina-auth-function`](https://github.com/lukebria/oficina-aut
   latência, métricas de negócio e logs com `trace.id` no New Relic; probes sem `502` no deploy, na troca de pods e na
   escala; HPA sem pico na inicialização (janela de 120 s) e escalando sob carga.
 - O ambiente **não fica ligado** (crédito limitado do AWS Academy): é recriado para testes e para a gravação do
-  vídeo. Passo a passo para subir/validar/derrubar: **runbook do projeto** (`runbook/RUNBOOK.md` no repositório
-  de specs, com scripts).
+  vídeo. Passo a passo para subir/validar/derrubar: **[guia de gravação/runbook](https://github.com/lukebria/oficina-mvp-infra-iac/blob/master/runbook/RUNBOOK.md)** (no repositório `oficina-mvp-infra-iac`).
 - **Chave `DEPLOY_ENABLED`**: com `false` (padrão) os merges rodam só testes, Sonar e build; com `true` (ou
   disparo manual) publicam no ECR e fazem o deploy. Ver [Via CI/CD](#via-cicd-automático).
 - Pendências conhecidas: ver [Pendências conhecidas](#pendências-conhecidas).
@@ -262,24 +261,16 @@ flowchart LR
 
 `homolog` e `master` fazem deploy nos namespaces `homolog`/`prod` (já provisionados via Terraform em
 `oficina-mvp-infra-iac/namespaces.tf`), no mesmo cluster/Kong — o pipeline (`app-deploy.yml`) escolhe o
-namespace pela branch de origem. Como os dois ambientes compartilham o mesmo Kong, o `Ingress` de cada um
-usa um **host diferente** (`homolog.oficina-mvp.local` / `prod.oficina-mvp.local`, substituído em
-`k8s/ingress.yaml` pelo pipeline) para o Kong conseguir rotear sem colisão.
+namespace pela branch de origem.
 
-Em `homolog`, o host pode ser trocado pela GitHub Variable **`HOMOLOG_INGRESS_HOST`**: configurada com o DNS do
-LoadBalancer do Kong (`kubectl get svc -n kong kong-kong-proxy`), o ambiente responde direto nessa URL — é o
-que a Lambda de autenticação (`BACKEND_BASE_URL`) precisa, já que o `fetch` do Node não permite forçar o header
-`Host`. Como o DNS do LoadBalancer muda a cada recriação do cluster, a variable precisa ser atualizada junto.
-
-Em `prod` (deploy a partir de `master`) vale o mesmo com a variable **`PROD_INGRESS_HOST`**. O
-`runbook/scripts/wire-endpoints.js kong` grava as duas. Como apontam para o mesmo DNS, os dois ambientes não
-devem estar de pé ao mesmo tempo (no Lab, sobe-se um ambiente por janela de deploy).
+O host do `Ingress` é o **DNS do LoadBalancer do Kong**, lido do cluster pelo próprio deploy
+(`kubectl get svc -n kong kong-kong-proxy`; plano 18). Assim o ambiente responde direto nessa URL — é o que a
+Lambda de autenticação precisa, já que o `fetch` do Node não permite forçar o header `Host` — e nada precisa ser
+atualizado à mão quando o cluster é recriado. Como os dois namespaces usariam o mesmo host, só um ambiente fica de
+pé por vez (no Lab, sobe-se um por janela de deploy; a gravação usa `prod`).
 
 ```bash
-# com HOMOLOG_INGRESS_HOST configurada
 curl http://<DNS-do-LoadBalancer-do-Kong>/api/health
-# sem a variable (host fictício)
-curl -H "Host: homolog.oficina-mvp.local" http://<DNS-do-LoadBalancer-do-Kong>/api/health
 ```
 
 ## Como rodar localmente
@@ -424,8 +415,8 @@ kubectl apply -f k8s/ingress.yaml
 > ⚠️ `k8s/config-secret.yaml` e `k8s/app.yaml` têm placeholders (`${DB_HOST}`, `${DB_PASSWORD}`, `${JWT_SECRET}`,
 > `${SEED_ADMIN_PASSWORD}`, `${ECR_REPOSITORY_URL}`, `${IMAGE_TAG}`) que na pipeline são substituídos via `envsubst`/`sed` a partir de
 > GitHub Secrets/Variables antes do `apply`. Para aplicar manualmente, substitua esses valores você mesmo antes de
-> rodar os comandos acima. `DB_HOST` é o endpoint do RDS
-> (`oficina-mvp-infra-db`); sem essa variable o pipeline para no passo *Check DB_HOST*.
+> rodar os comandos acima. `DB_HOST`/`DB_PASSWORD` são o
+> endpoint e a senha do RDS (`oficina-mvp-infra-db`), lidos da AWS pelo pipeline.
 
 ## Infraestrutura como código (Terraform)
 
@@ -436,12 +427,14 @@ Learner Lab** (credenciais temporárias com session token, role `LabRole` fixa d
 própria).
 
 O banco de dados é um **Amazon RDS PostgreSQL 16**, provisionado pelo repositório
-[`oficina-mvp-infra-db`](https://github.com/lukebria/oficina-mvp-infra-db). A aplicação o recebe pela variable
-`DB_HOST` (endpoint) e pelo secret `DB_PASSWORD` (senha do Secrets Manager), sem editar YAML. Não há banco
+[`oficina-mvp-infra-db`](https://github.com/lukebria/oficina-mvp-infra-db). A aplicação o recebe pelo
+endpoint e pela senha (Secrets Manager), que o próprio deploy lê da AWS (plano 18) — sem variable para atualizar
+nem YAML para editar. Não há banco
 dentro do cluster: o antigo Postgres em pod (`k8s/banco.yaml`) foi removido em 12/10 (plano 17).
 
 A pipeline deste repositório assume que o cluster, o ECR e o Kong **já existem** (ver
-`aws eks update-kubeconfig` em `.github/workflows/app-deploy.yml`): ordem de subida no runbook do projeto.
+`aws eks update-kubeconfig` em `.github/workflows/app-deploy.yml`): ordem de subida no [guia de gravação/runbook](https://github.com/lukebria/oficina-mvp-infra-iac/blob/master/runbook/RUNBOOK.md). Se o Kong ou o RDS ainda não
+existirem, o passo *Discover Kong and RDS* falha dizendo qual repositório subir antes.
 
 ## Variáveis de ambiente
 
@@ -1051,8 +1044,7 @@ gravação); ver [Como acessar](#como-acessar-quando-o-ambiente-estiver-de-pé).
 
 ## Vídeo demonstrativo
 
-_Link do vídeo (YouTube/Vimeo, até 15 min) a ser adicionado depois da gravação._ Roteiro:
-`roteiro-video-demonstracao.md` no repositório de specs do projeto.
+_Link do vídeo (YouTube/Vimeo, até 15 min) a ser adicionado depois da gravação._ Roteiro: [roteiro do vídeo](https://github.com/lukebria/oficina-mvp-infra-iac/blob/master/runbook/ROTEIRO-VIDEO.md).
 
 ## Documentação complementar
 
