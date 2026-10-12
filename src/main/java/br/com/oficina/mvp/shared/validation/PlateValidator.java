@@ -3,11 +3,13 @@ package br.com.oficina.mvp.shared.validation;
 import br.com.oficina.mvp.shared.exception.BusinessException;
 import org.springframework.http.HttpStatus;
 
+import java.util.Locale;
+
 public final class PlateValidator {
     private PlateValidator() {}
 
     public static String normalize(String plate) {
-        return plate == null ? "" : plate.replaceAll("[^a-zA-Z0-9]", "").toUpperCase();
+        return plate == null ? "" : plate.replaceAll("[^a-zA-Z0-9]", "").toUpperCase(Locale.ROOT);
     }
 
     public static String requireValid(String rawPlate) {

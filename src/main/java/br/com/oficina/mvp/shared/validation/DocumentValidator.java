@@ -4,6 +4,9 @@ import br.com.oficina.mvp.shared.exception.BusinessException;
 import org.springframework.http.HttpStatus;
 
 public final class DocumentValidator {
+    private static final int CPF_LENGTH = 11;
+    private static final int CNPJ_LENGTH = 14;
+
     private DocumentValidator() {}
 
     public static String onlyDigits(String value) {
@@ -24,14 +27,14 @@ public final class DocumentValidator {
 
     public static boolean isValidCpfOrCnpj(String document) {
         var digits = onlyDigits(document);
-        if (digits.length() == 11) return isValidCpf(digits);
-        if (digits.length() == 14) return isValidCnpj(digits);
+        if (digits.length() == CPF_LENGTH) return isValidCpf(digits);
+        if (digits.length() == CNPJ_LENGTH) return isValidCnpj(digits);
         return false;
     }
 
     public static boolean isValidCpf(String cpf) {
         var digits = onlyDigits(cpf);
-        if (digits.length() != 11 || digits.matches("(\\d)\\1{10}")) return false;
+        if (digits.length() != CPF_LENGTH || digits.matches("(\\d)\\1{10}")) return false;
 
         int first = cpfDigit(digits.substring(0, 9), 10);
         int second = cpfDigit(digits.substring(0, 9) + first, 11);
@@ -50,7 +53,7 @@ public final class DocumentValidator {
 
     public static boolean isValidCnpj(String cnpj) {
         var digits = onlyDigits(cnpj);
-        if (digits.length() != 14 || digits.matches("(\\d)\\1{13}")) return false;
+        if (digits.length() != CNPJ_LENGTH || digits.matches("(\\d)\\1{13}")) return false;
 
         int first = cnpjDigit(digits, new int[]{5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2});
         int second = cnpjDigit(digits, new int[]{6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2});

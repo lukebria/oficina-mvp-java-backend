@@ -25,6 +25,10 @@ import java.util.List;
 @Configuration
 @EnableConfigurationProperties({JwtProperties.class, AppCorsProperties.class, InternalApiProperties.class})
 public class SecurityConfig {
+    private static final String ADMIN = "ADMIN";
+    private static final String MECHANIC = "MECHANIC";
+    private static final String ATTENDANT = "ATTENDANT";
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter,
                                              InternalApiKeyAuthenticationFilter internalApiKeyAuthenticationFilter) throws Exception {
@@ -43,32 +47,32 @@ public class SecurityConfig {
 
                         .requestMatchers(HttpMethod.GET, "/api/internal/customers/{document}").hasRole("INTERNAL_SERVICE")
 
-                        .requestMatchers(HttpMethod.GET, "/api/customers", "/api/customers/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
-                        .requestMatchers(HttpMethod.POST, "/api/customers").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
-                        .requestMatchers(HttpMethod.PUT, "/api/customers/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
-                        .requestMatchers(HttpMethod.DELETE, "/api/customers/{id}").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/customers", "/api/customers/{id}").hasAnyRole(ADMIN, MECHANIC, ATTENDANT)
+                        .requestMatchers(HttpMethod.POST, "/api/customers").hasAnyRole(ADMIN, MECHANIC, ATTENDANT)
+                        .requestMatchers(HttpMethod.PUT, "/api/customers/{id}").hasAnyRole(ADMIN, MECHANIC, ATTENDANT)
+                        .requestMatchers(HttpMethod.DELETE, "/api/customers/{id}").hasRole(ADMIN)
 
-                        .requestMatchers(HttpMethod.GET, "/api/vehicles", "/api/vehicles/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
-                        .requestMatchers(HttpMethod.POST, "/api/vehicles").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
-                        .requestMatchers(HttpMethod.PUT, "/api/vehicles/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
-                        .requestMatchers(HttpMethod.DELETE, "/api/vehicles/{id}").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/vehicles", "/api/vehicles/{id}").hasAnyRole(ADMIN, MECHANIC, ATTENDANT)
+                        .requestMatchers(HttpMethod.POST, "/api/vehicles").hasAnyRole(ADMIN, MECHANIC, ATTENDANT)
+                        .requestMatchers(HttpMethod.PUT, "/api/vehicles/{id}").hasAnyRole(ADMIN, MECHANIC, ATTENDANT)
+                        .requestMatchers(HttpMethod.DELETE, "/api/vehicles/{id}").hasRole(ADMIN)
 
-                        .requestMatchers(HttpMethod.GET, "/api/services", "/api/services/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
-                        .requestMatchers(HttpMethod.POST, "/api/services").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/api/services/{id}").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/services/{id}").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/services", "/api/services/{id}").hasAnyRole(ADMIN, MECHANIC, ATTENDANT)
+                        .requestMatchers(HttpMethod.POST, "/api/services").hasRole(ADMIN)
+                        .requestMatchers(HttpMethod.PUT, "/api/services/{id}").hasRole(ADMIN)
+                        .requestMatchers(HttpMethod.DELETE, "/api/services/{id}").hasRole(ADMIN)
 
-                        .requestMatchers(HttpMethod.GET, "/api/parts", "/api/parts/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
-                        .requestMatchers(HttpMethod.POST, "/api/parts").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/api/parts/{id}").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/parts/{id}").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/parts", "/api/parts/{id}").hasAnyRole(ADMIN, MECHANIC, ATTENDANT)
+                        .requestMatchers(HttpMethod.POST, "/api/parts").hasRole(ADMIN)
+                        .requestMatchers(HttpMethod.PUT, "/api/parts/{id}").hasRole(ADMIN)
+                        .requestMatchers(HttpMethod.DELETE, "/api/parts/{id}").hasRole(ADMIN)
 
-                        .requestMatchers(HttpMethod.GET, "/api/service-orders", "/api/service-orders/{id}").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
-                        .requestMatchers(HttpMethod.POST, "/api/service-orders").hasAnyRole("ADMIN", "MECHANIC", "ATTENDANT")
+                        .requestMatchers(HttpMethod.GET, "/api/service-orders", "/api/service-orders/{id}").hasAnyRole(ADMIN, MECHANIC, ATTENDANT)
+                        .requestMatchers(HttpMethod.POST, "/api/service-orders").hasAnyRole(ADMIN, MECHANIC, ATTENDANT)
                         .requestMatchers(HttpMethod.PATCH, "/api/service-orders/{id}/approval", "/api/service-orders/{id}/status", "/api/service-orders/{id}/diagnosis")
-                        .hasAnyRole("ADMIN", "MECHANIC")
+                        .hasAnyRole(ADMIN, MECHANIC)
 
-                        .requestMatchers(HttpMethod.GET, "/api/reports/average-execution-time").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/reports/average-execution-time").hasRole(ADMIN)
 
                         .anyRequest().authenticated()
                 )
