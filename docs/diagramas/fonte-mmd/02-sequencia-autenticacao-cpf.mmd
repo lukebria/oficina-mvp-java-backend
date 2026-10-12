@@ -1,0 +1,41 @@
+sequenceDiagram
+    actor Cliente
+    participant Kong as Kong (API Gateway)
+    participant App as oficina-mvp-java-backend
+    participant ApiGw as AWS API Gateway
+    participant Lambda as oficina-auth-function
+    participant DB as PostgreSQL
+
+    Cliente->>Kong: GET /api/public/service-orders/{code}<br/>(sem token)
+    Kong-->>Cliente: 401 Unauthorized (plugin jwt - nem chega na aplicação)
+
+    Cliente->>ApiGw: POST /authenticate {"document": "CPF"}
+    ApiGw->>Lambda: invoke (APIGatewayProxyEvent)
+    Lambda->>Lambda: valida CPF/CNPJ (documentValidator)
+    Lambda->>Kong: GET /api/internal/customers/{document}<br/>X-Internal-Api-Key
+    Kong->>App: encaminha (InternalApiKeyAuthenticationFilter)
+    App->>DB: findByDocument
+    DB-->>App: Customer (status ACTIVE/INACTIVE) | não encontrado
+    App-->>Kong: 200 {found, customerId, status} | 404
+    Kong-->>Lambda: resposta
+    alt status = ACTIVE
+        Lambda->>Lambda: assina JWT HS256 (CUSTOMER_JWT_SECRET,<br/>sub=documento, role=CUSTOMER, iss=customer-app)
+        Lambda-->>Cliente: 200 {"token": "..."}
+    else status = INACTIVE
+        Lambda-->>Cliente: 403 (sem assinar token)
+    else não encontrado
+        Lambda-->>Cliente: 404
+    end
+
+    Cliente->>Kong: GET /api/public/service-orders/{code}<br/>Authorization: Bearer token-cliente
+    Kong->>Kong: plugin jwt: valida assinatura + expiração<br/>(ADR-006, consumer casado pelo claim iss)
+    alt token inválido/expirado
+        Kong-->>Cliente: 401 (nem chega na aplicação)
+    end
+    Kong->>App: encaminha (só se o Kong validar)
+    App->>App: JwtAuthenticationFilter.parseCustomer<br/>(chave CUSTOMER_JWT_SECRET, valida de novo)
+    App->>DB: findByDocument (revalida status a cada request)
+    DB-->>App: Customer ACTIVE
+    App->>App: confere se documento é dono da OS {code}
+    App-->>Kong: 200 (visão pública da OS)
+    Kong-->>Cliente: 200

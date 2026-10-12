@@ -999,9 +999,7 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     Cliente->>Kong: GET /api/public/service-orders/{code}<br/>(sem token)
-    Kong->>App: encaminha
-    App-->>Kong: 401 Unauthorized
-    Kong-->>Cliente: 401 Unauthorized
+    Kong-->>Cliente: 401 Unauthorized (plugin jwt - nem chega na aplicação)
 
     Cliente->>ApiGw: POST /authenticate {"document": "CPF"}
     ApiGw->>Lambda: invoke (APIGatewayProxyEvent)

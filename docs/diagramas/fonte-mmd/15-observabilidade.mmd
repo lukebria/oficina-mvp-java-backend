@@ -1,0 +1,29 @@
+flowchart LR
+    subgraph EKS["Cluster EKS"]
+        App["oficina-mvp-java-backend<br/>(Spring Boot + OpenTelemetry)"]
+        NRI["New Relic nri-bundle<br/>(kube-state-metrics, kubelet,<br/>eventos, logs)"]
+    end
+    Lambda["oficina-auth-function<br/>(layer New Relic)"]
+
+    subgraph NR["New Relic (conta do projeto)"]
+        Traces["Traces / APM<br/>latência por rota"]
+        Metrics["Métricas de negócio<br/>OS criadas · tempo por status ·<br/>falhas de integração"]
+        Infra["Infra K8s<br/>CPU/memória, pods, HPA"]
+        Logs["Logs JSON<br/>correlacionados por trace.id"]
+        Dash["Dashboard<br/>Negócio + Operação"]
+        Alerts["Alertas (e-mail)<br/>falha em OS · falha de integração ·<br/>aplicação indisponível"]
+    end
+
+    App -->|"OTLP traces"| Traces
+    App -->|"OTLP métricas"| Metrics
+    App -->|"stdout JSON"| NRI
+    NRI --> Infra
+    NRI --> Logs
+    Lambda -.-> Traces
+    Traces --> Dash
+    Metrics --> Dash
+    Infra --> Dash
+    Logs --> Dash
+    Traces --> Alerts
+    Metrics --> Alerts
+    Infra --> Alerts

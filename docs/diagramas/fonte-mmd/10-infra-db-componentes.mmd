@@ -1,0 +1,19 @@
+flowchart LR
+    subgraph EKS["Cluster EKS (oficina-mvp-infra-iac)"]
+        App["oficina-mvp-java-backend<br/>(namespaces homolog/prod)"]
+        SG_EKS["Security Group do cluster"]
+    end
+
+    subgraph DB["Este repositório (oficina-mvp-infra-db)"]
+        SG_RDS["Security Group do RDS<br/>(ingress só do SG do cluster)"]
+        RDS[("Amazon RDS PostgreSQL<br/>db.t3.micro, single-AZ")]
+        SM["AWS Secrets Manager<br/>(senha do banco)"]
+    end
+
+    Pipe["Pipeline de deploy do backend<br/>(GitHub Actions)"]
+
+    App -->|"5432, dentro da VPC"| SG_RDS --> RDS
+    SG_EKS -.->|"remote_state: eks_cluster_security_group_id"| SG_RDS
+    RDS -.-> SM
+    Pipe -.->|"lê endpoint do RDS + senha<br/>a cada deploy"| SM
+    Pipe -.->|"aplica manifestos (DB_HOST)"| App

@@ -1,0 +1,25 @@
+flowchart LR
+    Dev(["Integrante"]) -->|"push"| Feat["branch feat/*"]
+    Feat -->|"Pull Request"| Homolog["branch homolog"]
+    Homolog -->|"Pull Request<br/>(aprovação obrigatória)"| Master["branch master<br/>(protegida)"]
+
+    subgraph CI["GitHub Actions — em todo PR e push"]
+        Test["Testes, Sonar, PMD/SpotBugs/Checkstyle<br/>(backend) · typecheck/test (Lambda)<br/>· terraform fmt/validate (infra)"]
+    end
+    Feat -.-> Test
+    Homolog -.-> Test
+    Master -.-> Test
+
+    subgraph CD["Deploy na AWS — merge com DEPLOY_ENABLED=true ou botão Run workflow"]
+        direction TB
+        IaC["1. oficina-mvp-infra-iac<br/>terraform apply: bucket de state, EKS, ECR,<br/>Kong (LoadBalancer), metrics-server, New Relic"]
+        DB["2a. oficina-mvp-infra-db<br/>terraform apply: RDS PostgreSQL"]
+        Fn["2b. oficina-auth-function<br/>build + terraform apply: Lambda + API Gateway<br/>(lê o endereço do Kong do cluster)"]
+        App["3. oficina-mvp-java-backend<br/>imagem no ECR (tag = commit) → lê Kong/RDS da AWS<br/>→ kubectl apply → rollout status"]
+        IaC --> DB
+        IaC --> Fn
+        DB --> App
+        Fn -.-> App
+    end
+    Homolog ==>|"namespace homolog"| CD
+    Master ==>|"namespace prod"| CD

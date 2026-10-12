@@ -1,0 +1,18 @@
+sequenceDiagram
+  participant C as CustomerController
+  participant U as CustomerUseCase
+  participant S as CustomerService
+  participant P as CustomerRepositoryPort
+  participant A as CustomerPersistenceAdapter
+  participant DB as PostgreSQL
+
+  C->>U: Command (DTO → Command)
+  U->>S: implementa
+  S->>S: regras / validação
+  S->>P: save / find...
+  P->>A: PersistenceAdapter
+  A->>DB: JpaRepository
+  DB-->>A: XJpaEntity
+  A-->>S: Domain (via Mapper)
+  S-->>C: Result / Domain
+  C-->>C: ResponseDto
