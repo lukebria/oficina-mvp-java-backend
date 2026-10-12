@@ -68,6 +68,10 @@ management:
       export:
         enabled: ${OTLP_METRICS_EXPORT_ENABLED:false}
         url: ${NEW_RELIC_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
+        # Delta (recomendado pelo New Relic): com o padrão cumulativo, o New Relic usa o 1º ponto de cada série como
+        # base e o descarta - e como cada deploy recria os pods, os contadores (OS criadas, falhas de integração)
+        # apareciam como 0 nos dashboards (visto na validação de 12/10).
+        aggregation-temporality: delta
         headers:
           api-key: ${NEW_RELIC_LICENSE_KEY:}
     # Logs NÃO vão por OTLP: já chegam ao New Relic pelo agente do cluster (nri-bundle); duplicar gastaria a cota.
