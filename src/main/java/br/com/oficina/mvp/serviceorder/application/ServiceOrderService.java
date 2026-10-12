@@ -35,6 +35,7 @@ import java.util.concurrent.ThreadLocalRandom;
 @Service
 public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOrderUseCase {
     private static final int MAX_CODE_GENERATION_ATTEMPTS = 5;
+    private static final int MIN_HISTORY_ENTRIES_FOR_DURATION = 2;
 
     private final ServiceOrderRepositoryPort serviceOrders;
     private final CustomerRepositoryPort customers;
@@ -221,7 +222,7 @@ public class ServiceOrderService implements ServiceOrderUseCase, PublicServiceOr
      */
     private void recordPreviousStatusDuration(ServiceOrder order) {
         var history = order.getHistory();
-        if (history.size() < 2) {
+        if (history.size() < MIN_HISTORY_ENTRIES_FOR_DURATION) {
             return;
         }
         var previous = history.get(history.size() - 2);

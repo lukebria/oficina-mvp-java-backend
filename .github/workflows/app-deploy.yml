@@ -159,7 +159,9 @@ jobs:
         run: |
           if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "namespace=prod" >> "$GITHUB_OUTPUT"
-            echo "ingress_host=prod.oficina-mvp.local" >> "$GITHUB_OUTPUT"
+            # PROD_INGRESS_HOST (GitHub Variable, gravada pelo runbook/wire-endpoints.js): DNS do LoadBalancer do Kong, para
+            # a Lambda e o curl chegarem em prod sem header Host. Sem a variable, mantém o host fictício (plano 15).
+            echo "ingress_host=${{ vars.PROD_INGRESS_HOST || 'prod.oficina-mvp.local' }}" >> "$GITHUB_OUTPUT"
           else
             echo "namespace=homolog" >> "$GITHUB_OUTPUT"
             # HOMOLOG_INGRESS_HOST (GitHub Variable): DNS do LoadBalancer do Kong, para a Lambda e o curl chegarem

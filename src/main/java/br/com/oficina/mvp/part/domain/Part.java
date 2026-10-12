@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.Locale;
 
 public class Part extends BaseDomain {
     private String name;
@@ -52,7 +53,7 @@ public class Part extends BaseDomain {
         this.stockQuantity -= quantity;
     }
 
-    private String normalizeSku(String sku) { return sku == null ? null : sku.trim().toUpperCase(); }
+    private String normalizeSku(String sku) { return sku == null ? null : sku.trim().toUpperCase(Locale.ROOT); }
 
     public String getName() { return name; }
     public String getSku() { return sku; }
