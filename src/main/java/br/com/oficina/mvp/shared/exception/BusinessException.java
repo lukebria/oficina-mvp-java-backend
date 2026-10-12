@@ -4,6 +4,8 @@ import org.springframework.http.HttpStatus;
 import java.util.Map;
 
 public class BusinessException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
     private final HttpStatus status;
     private final Map<String, Object> details;
 
