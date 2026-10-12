@@ -270,6 +270,10 @@ LoadBalancer do Kong (`kubectl get svc -n kong kong-kong-proxy`), o ambiente res
 que a Lambda de autenticação (`BACKEND_BASE_URL`) precisa, já que o `fetch` do Node não permite forçar o header
 `Host`. Como o DNS do LoadBalancer muda a cada recriação do cluster, a variable precisa ser atualizada junto.
 
+Em `prod` (deploy a partir de `master`) vale o mesmo com a variable **`PROD_INGRESS_HOST`**. O
+`runbook/scripts/wire-endpoints.js kong` grava as duas. Como apontam para o mesmo DNS, os dois ambientes não
+devem estar de pé ao mesmo tempo (no Lab, sobe-se um ambiente por janela de deploy).
+
 ```bash
 # com HOMOLOG_INGRESS_HOST configurada
 curl http://<DNS-do-LoadBalancer-do-Kong>/api/health
