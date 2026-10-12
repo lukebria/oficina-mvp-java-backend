@@ -154,19 +154,13 @@ jobs:
 
       # Namespaces "homolog"/"prod" já existem via Terraform (oficina-mvp-infra-iac/namespaces.tf) - aqui só
       # escolhemos qual dos dois é o alvo deste deploy, a partir da branch de origem (git flow do projeto).
-      - name: Determine target namespace and ingress host
+      - name: Determine target namespace
         id: env
         run: |
           if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "namespace=prod" >> "$GITHUB_OUTPUT"
-            # PROD_INGRESS_HOST (GitHub Variable, gravada pelo runbook/wire-endpoints.js): DNS do LoadBalancer do Kong, para
-            # a Lambda e o curl chegarem em prod sem header Host. Sem a variable, mantém o host fictício (plano 15).
-            echo "ingress_host=${{ vars.PROD_INGRESS_HOST || 'prod.oficina-mvp.local' }}" >> "$GITHUB_OUTPUT"
           else
             echo "namespace=homolog" >> "$GITHUB_OUTPUT"
-            # HOMOLOG_INGRESS_HOST (GitHub Variable): DNS do LoadBalancer do Kong, para a Lambda e o curl chegarem
-            # sem forçar header Host (fetch do Node não permite). Sem a variable, mantém o host fictício.
-            echo "ingress_host=${{ vars.HOMOLOG_INGRESS_HOST || 'homolog.oficina-mvp.local' }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Configure AWS Credentials
@@ -185,14 +179,31 @@ jobs:
         run: |
           kubectl create namespace ${{ steps.env.outputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
 
-      # Plano 17: o banco é só o RDS (sem Postgres em pod). Sem DB_HOST a app subiria apontando para um banco que não
-      # existe - falha aqui, com a instrução, em vez de deixar os pods em CrashLoopBackOff.
-      - name: Check DB_HOST (RDS)
+      # Plano 18: o que muda a cada recriação da infra é lido da própria AWS na hora do deploy (antes eram variables
+      # gravadas por script): DNS do LoadBalancer do Kong (host do Ingress - a Lambda e o curl chegam sem header Host),
+      # endpoint do RDS e senha do banco (Secrets Manager, mascarada no log). Falha com instrução se algo não subiu.
+      - name: Discover Kong and RDS
+        id: discover
         run: |
-          if [ -z "${{ vars.DB_HOST }}" ]; then
-            echo "::error::Variable DB_HOST vazia. Suba o oficina-mvp-infra-db e rode runbook/scripts/wire-endpoints.js rds."
+          ELB=$(kubectl get svc -n kong kong-kong-proxy -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          if [ -z "$ELB" ]; then
+            echo "::error::LoadBalancer do Kong sem endereço. Suba o oficina-mvp-infra-iac (ou espere 1-2 min)."
             exit 1
           fi
+          DB_HOST=$(aws rds describe-db-instances --db-instance-identifier oficina-mecnica-lab-postgres             --query 'DBInstances[0].Endpoint.Address' --output text 2>/dev/null || true)
+          if [ -z "$DB_HOST" ] || [ "$DB_HOST" = "None" ]; then
+            echo "::error::RDS oficina-mecnica-lab-postgres não encontrado. Suba o oficina-mvp-infra-db primeiro."
+            exit 1
+          fi
+          RAW=$(aws secretsmanager get-secret-value --secret-id oficina-mecnica-lab-rds-password             --query SecretString --output text)
+          if echo "$RAW" | jq -e 'type == "object"' >/dev/null 2>&1; then DB_PASSWORD=$(echo "$RAW" | jq -r '.password'); else DB_PASSWORD="$RAW"; fi
+          echo "::add-mask::$DB_PASSWORD"
+          echo "Kong: $ELB | RDS: $DB_HOST"
+          {
+            echo "ingress_host=$ELB"
+            echo "db_host=$DB_HOST"
+            echo "db_password=$DB_PASSWORD"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Substitute Secrets and Image URL & Apply K8s Manifests
         env:
@@ -201,11 +212,11 @@ jobs:
           # Mesma tag que o job "push" publicou neste run (plano 16)
           IMAGE_TAG: ${{ github.sha }}
           NAMESPACE: ${{ steps.env.outputs.namespace }}
-          INGRESS_HOST: ${{ steps.env.outputs.ingress_host }}
+          INGRESS_HOST: ${{ steps.discover.outputs.ingress_host }}
           # Mapeamento dos GitHub Secrets para variáveis do ambiente de execução
-          # DB_HOST: endpoint do RDS (oficina-mvp-infra-db), gravado pelo runbook/scripts/wire-endpoints.js rds
-          DB_HOST: ${{ vars.DB_HOST }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          # Endpoint e senha do RDS (oficina-mvp-infra-db), descobertos acima
+          DB_HOST: ${{ steps.discover.outputs.db_host }}
+          DB_PASSWORD: ${{ steps.discover.outputs.db_password }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           CUSTOMER_JWT_SECRET: ${{ secrets.CUSTOMER_JWT_SECRET }}
           INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
