@@ -335,7 +335,7 @@
                 "accountIds": [
                   8558465
                 ],
-                "query": "FROM Log SELECT timestamp, log.level, message, trace.id WHERE service.name = 'oficina-mvp-backend' OR namespace_name = 'homolog' SINCE 1 hour ago LIMIT 100"
+                "query": "FROM Log SELECT timestamp, log.level, message, trace.id WHERE service.name = 'oficina-mvp-backend' OR namespace_name IN ('homolog', 'prod') SINCE 1 hour ago LIMIT 100"
               }
             ]
           }

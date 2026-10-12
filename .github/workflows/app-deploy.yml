@@ -189,6 +189,8 @@ jobs:
         env:
           ECR_REGISTRY: ${{ needs.push.outputs.ecr_registry }}
           ECR_REPOSITORY: oficina-mecnica-lab
+          # Mesma tag que o job "push" publicou neste run (plano 16)
+          IMAGE_TAG: ${{ github.sha }}
           NAMESPACE: ${{ steps.env.outputs.namespace }}
           INGRESS_HOST: ${{ steps.env.outputs.ingress_host }}
           # Mapeamento dos GitHub Secrets para variáveis do ambiente de execução
@@ -217,8 +219,8 @@ jobs:
           envsubst '${DB_HOST} ${DB_PASSWORD} ${JWT_SECRET} ${CUSTOMER_JWT_SECRET} ${INTERNAL_API_KEY} ${SEED_ADMIN_PASSWORD} ${MAIL_USERNAME} ${MAIL_PASSWORD} ${MAIL_FROM} ${MAIL_HOST} ${MAIL_PORT} ${NEW_RELIC_LICENSE_KEY} ${NEW_RELIC_OTLP_ENDPOINT} ${NEW_RELIC_OTLP_METRICS_ENDPOINT} ${TRACING_SAMPLING_PROBABILITY} ${OTLP_METRICS_EXPORT_ENABLED}' < k8s/config-secret.yaml > k8s/config-secret.tmp.yaml
           mv k8s/config-secret.tmp.yaml k8s/config-secret.yaml
 
-          # 2. Substitui o placeholder da Imagem Docker no app.yaml
-          sed -i "s|\${ECR_REPOSITORY_URL}|$ECR_REGISTRY/$ECR_REPOSITORY|g" k8s/app.yaml
+          # 2. Substitui a imagem Docker no app.yaml (repositório + tag do commit)
+          sed -i "s|\${ECR_REPOSITORY_URL}|$ECR_REGISTRY/$ECR_REPOSITORY|g; s|\${IMAGE_TAG}|$IMAGE_TAG|g" k8s/app.yaml
 
           # 3. Substitui o host do Ingress (diferencia homolog/prod no mesmo Kong) nos dois manifestos de Ingress
           envsubst '${INGRESS_HOST}' < k8s/ingress.yaml > k8s/ingress.tmp.yaml
@@ -233,3 +235,6 @@ jobs:
           kubectl apply -n "$NAMESPACE" -f k8s/hpa.yaml
           kubectl apply -n "$NAMESPACE" -f k8s/ingress.yaml
           kubectl apply -n "$NAMESPACE" -f k8s/ingress-public.yaml
+
+          # 5. Espera os pods novos ficarem prontos (readinessProbe): o job só fica verde se o rollout concluir
+          kubectl rollout status deployment/oficina-app-deployment -n "$NAMESPACE" --timeout=300s

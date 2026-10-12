@@ -381,7 +381,7 @@ Os manifests ficam em [`/k8s`](k8s):
 |-----------------------|--------------------------------------------------------------------------------------------------|
 | `config-secret.yaml`  | `ConfigMap app-config` + `Secret app-secrets` (credenciais de banco, JWT, admin seed e e-mail)   |
 | `banco.yaml`          | `Deployment banco-deployment` + `Service banco-service` (PostgreSQL em pod, **fallback** quando `DB_HOST` não está configurada; o banco real é o RDS) |
-| `app.yaml`            | `Deployment oficina-app-deployment` (com `resources.requests/limits` e probes `startup`/`readiness`/`liveness` no Actuator) + `Service` (ClusterIP) |
+| `app.yaml`            | `Deployment oficina-app-deployment` (imagem com a tag do commit, sem `replicas` fixo — o HPA decide; `resources.requests/limits` e probes `startup`/`readiness`/`liveness` no Actuator) + `Service` (ClusterIP) |
 | `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (1 a 5 réplicas, CPU 20%, sobe após 2 min acima do alvo)  |
 | `ingress.yaml`        | `Ingress oficina-app-ingress` (`ingressClassName: kong`) — rota geral que o Kong usa pra encontrar o Service da app |
 | `ingress-public.yaml` | `Ingress oficina-app-public-ingress` — só `/api/public/service-orders/**`, com o plugin `jwt` do Kong anexado (ADR-006) |
@@ -393,7 +393,9 @@ Os manifests ficam em [`/k8s`](k8s):
 
 A pipeline (`.github/workflows/app-deploy.yml`) aplica os manifests automaticamente a cada push em `homolog`
 (namespace `homolog`) e `master` (namespace `prod`), depois de rodar os testes, o SonarQube e o build/push da
-imagem Docker para o ECR — ver [Fluxo de deploy (CI/CD)](#diagramas).
+imagem Docker para o ECR — ver [Fluxo de deploy (CI/CD)](#diagramas). A imagem é publicada com a tag do commit
+(`github.sha`, além de `latest`) e o `app.yaml` usa essa tag, então cada deploy troca os pods (rolling update); o
+job termina com `kubectl rollout status` e só fica verde quando os pods novos passam na `readinessProbe`.
 
 **Chave de deploy — variable `DEPLOY_ENABLED`** (o crédito do AWS Academy é limitado; detalhe em
 `plans/10-chave-deploy-enabled.md` no repositório de specs):
@@ -421,7 +423,7 @@ kubectl apply -f k8s/ingress.yaml
 > cluster — ver `oficina-mvp-infra-iac`.
 
 > ⚠️ `k8s/config-secret.yaml` e `k8s/app.yaml` têm placeholders (`${DB_HOST}`, `${DB_PASSWORD}`, `${JWT_SECRET}`,
-> `${SEED_ADMIN_PASSWORD}`, `${ECR_REPOSITORY_URL}`) que na pipeline são substituídos via `envsubst`/`sed` a partir de
+> `${SEED_ADMIN_PASSWORD}`, `${ECR_REPOSITORY_URL}`, `${IMAGE_TAG}`) que na pipeline são substituídos via `envsubst`/`sed` a partir de
 > GitHub Secrets/Variables antes do `apply`. Para aplicar manualmente, substitua esses valores você mesmo antes de
 > rodar os comandos acima. `DB_HOST` cai no fallback `banco-service` (Postgres em pod) enquanto a variável
 > `DB_HOST` não estiver configurada no GitHub — passa a apontar para o RDS (`oficina-mvp-infra-db`) só de trocar
