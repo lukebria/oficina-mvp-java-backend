@@ -1,0 +1,37 @@
+sequenceDiagram
+    actor Staff as Equipe da oficina
+    participant Ctrl as ServiceOrderController
+    participant Svc as ServiceOrderService
+    participant CustPort as CustomerRepositoryPort
+    participant VehPort as VehicleRepositoryPort
+    participant CatPort as CatalogRepositoryPort
+    participant PartPort as PartRepositoryPort
+    participant SOPort as ServiceOrderRepositoryPort
+    participant Mail as ServiceOrderNotificationPort
+
+    Staff->>Ctrl: POST /api/service-orders (JWT ADMIN/MECHANIC/ATTENDANT)
+    Ctrl->>Svc: create(CreateServiceOrderCommand)
+    Svc->>Svc: normaliza/valida CPF e placa
+    Svc->>CustPort: findByDocument ou cria cliente
+    CustPort-->>Svc: Customer
+    Svc->>VehPort: findByPlate ou cria veículo
+    VehPort-->>Svc: Vehicle
+    Svc->>Svc: gera código único (generateUniqueOrderCode,<br/>até 5 tentativas)
+    Svc->>Svc: cria ServiceOrder (status RECEBIDA)
+    Svc->>CatPort: busca serviços ativos do catálogo
+    CatPort-->>Svc: ServiceCatalogItem[]
+    Svc->>Svc: adiciona WorkOrderService (preço congelado)
+    opt peças informadas
+        Svc->>PartPort: busca peças ativas
+        PartPort-->>Svc: Part[]
+        Svc->>Svc: adiciona WorkOrderPart (preço congelado)
+    end
+    Svc->>Svc: calcula totalServices, totalParts, totalAmount
+    Svc->>Svc: transição RECEBIDA -> AGUARDANDO_APROVACAO<br/>(ServiceOrderStatusPolicy)
+    Svc->>Svc: registra histórico (recebida + orçamento enviado)
+    Svc->>SOPort: save (OS + itens + histórico, cascade)
+    SOPort-->>Svc: ServiceOrder persistida
+    Svc->>Mail: notifyStatusChanged (AGUARDANDO_APROVACAO)
+    Mail-->>Svc: (e-mail enviado ou logado se falhar — não bloqueia)
+    Svc-->>Ctrl: ServiceOrder
+    Ctrl-->>Staff: 201 ServiceOrderResponseDto

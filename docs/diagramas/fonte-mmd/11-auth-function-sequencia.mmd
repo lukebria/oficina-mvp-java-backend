@@ -1,0 +1,24 @@
+sequenceDiagram
+    participant Cliente
+    participant Function as oficina-auth-function (Lambda)
+    participant Backend as oficina-mvp-java-backend (interno)
+    participant Kong as Kong (API Gateway, rota pública)
+
+    Cliente->>Function: POST /authenticate {"document": "CPF/CNPJ"}
+    Function->>Function: valida CPF/CNPJ (documentValidator)
+    Function->>Backend: GET /api/internal/customers/{document}<br/>X-Internal-Api-Key
+    Backend-->>Function: 200 {found, customerId, status} | 404
+    alt status = ACTIVE
+        Function->>Function: assina JWT (HS256, CUSTOMER_JWT_SECRET,<br/>iss=CUSTOMER_JWT_ISSUER)
+        Function-->>Cliente: 200 {"token": "..."}
+    else status = INACTIVE
+        Function-->>Cliente: 403 (sem assinar token)
+    else não encontrado
+        Function-->>Cliente: 404
+    end
+
+    Note over Cliente,Kong: Uso do token nas rotas públicas (fora desta function)
+    Cliente->>Kong: GET /api/public/service-orders/{code}<br/>Authorization: Bearer token
+    Kong->>Kong: plugin jwt: valida assinatura + expiração<br/>(consumer casado pelo claim iss)
+    Kong->>Backend: encaminha (só se o Kong validar)
+    Backend->>Backend: revalida status do cliente no banco

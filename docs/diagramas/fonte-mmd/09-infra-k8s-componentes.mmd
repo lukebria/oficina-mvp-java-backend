@@ -1,0 +1,36 @@
+flowchart TB
+    Cliente((Cliente))
+
+    subgraph AWS["AWS - conta AWS Academy Learner Lab (us-east-1)"]
+        subgraph EKS["Amazon EKS Cluster (este repositório)"]
+            Kong["Kong API Gateway<br/>(namespace kong, Ingress Controller, LoadBalancer,<br/>plugin jwt valida token de cliente)"]
+            MetricsServer["metrics-server<br/>(kube-system, alimenta o HPA)"]
+            subgraph NsHomolog["namespace: homolog"]
+                AppHomolog["oficina-mvp-java-backend (homolog)"]
+            end
+            subgraph NsProd["namespace: prod"]
+                AppProd["oficina-mvp-java-backend (prod)"]
+            end
+        end
+        RDS[("Amazon RDS PostgreSQL<br/>(oficina-mvp-infra-db)")]
+        Lambda["Lambda: oficina-auth-function<br/>(login por CPF)"]
+        ApiGwLambda["AWS API Gateway (HTTP API)<br/>só da Lambda"]
+        ECR["Amazon ECR<br/>(imagens da app)"]
+        S3["S3: terraform state<br/>(oficina-mvp-tfstate-ID-da-conta,<br/>criado na 1ª subida)"]
+        Dynamo["DynamoDB: lock do state<br/>(este repo, compartilhado)"]
+        NewRelic["New Relic<br/>(nri-bundle: CPU/memória, pods, HPA, logs)"]
+    end
+
+    Cliente -->|"1: CPF"| ApiGwLambda --> Lambda
+    Lambda -->|"2: consulta status + JWT"| Kong
+    Cliente -->|"3: rotas protegidas (JWT)"| Kong
+    Kong --> AppHomolog
+    Kong --> AppProd
+    AppHomolog --> RDS
+    AppProd --> RDS
+    ECR -.->|imagem| AppHomolog
+    ECR -.->|imagem| AppProd
+    S3 -.-> Dynamo
+    EKS -.->|infra metrics/logs| NewRelic
+    MetricsServer -.->|CPU dos pods p/ HPA| AppHomolog
+    MetricsServer -.->|CPU dos pods p/ HPA| AppProd

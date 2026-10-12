@@ -1,0 +1,10 @@
+flowchart TB
+  HTTP([HTTP JSON]) --> JWT[JwtAuthenticationFilter]
+  JWT --> CTRL[adapter/in/web<br/>Controller + DTOs]
+  CTRL -->|port/in UseCase| APP[application<br/>*Service]
+  APP --> DOM[domain<br/>POJOs + regras]
+  APP -->|port/out| PERSIST[adapter/out/persistence<br/>JpaEntity + Mapper + Adapter]
+  APP -->|port/out| MAIL[adapter/out/notification<br/>SMTP]
+  PERSIST --> DB[(PostgreSQL)]
+  APP --> CTRL
+  CTRL --> HTTP

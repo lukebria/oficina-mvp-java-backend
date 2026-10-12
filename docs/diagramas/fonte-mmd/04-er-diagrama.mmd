@@ -1,0 +1,88 @@
+erDiagram
+    USERS {
+        bigint id PK
+        varchar name
+        varchar email UK
+        varchar password_hash
+        varchar role "CHECK: ADMIN, ATTENDANT, MECHANIC"
+    }
+    CUSTOMERS {
+        bigint id PK
+        varchar name
+        varchar document UK
+        varchar email
+        varchar phone
+        varchar status "CHECK: ACTIVE, INACTIVE (V3)"
+    }
+    VEHICLES {
+        bigint id PK
+        bigint customer_id FK
+        varchar plate UK
+        varchar brand
+        varchar model
+        int manufacturing_year
+    }
+    SERVICE_CATALOG_ITEMS {
+        bigint id PK
+        varchar name UK
+        text description
+        numeric base_price
+        int estimated_minutes
+        boolean active
+    }
+    PARTS {
+        bigint id PK
+        varchar name
+        varchar sku UK
+        numeric unit_price
+        int stock_quantity
+        int min_stock
+        boolean active
+    }
+    SERVICE_ORDERS {
+        bigint id PK
+        varchar code UK
+        bigint customer_id FK
+        bigint vehicle_id FK
+        varchar status "CHECK: 7 valores (V1+V2, inclui RECUSADA)"
+        text diagnosis
+        numeric total_services
+        numeric total_parts
+        numeric total_amount
+        timestamptz approved_at
+        timestamptz started_at
+        timestamptz finalized_at
+        timestamptz delivered_at
+    }
+    WORK_ORDER_SERVICES {
+        bigint id PK
+        bigint service_order_id FK
+        bigint service_item_id FK
+        int quantity
+        numeric unit_price "preço congelado no momento da criação"
+        numeric total_price
+    }
+    WORK_ORDER_PARTS {
+        bigint id PK
+        bigint service_order_id FK
+        bigint part_id FK
+        int quantity
+        numeric unit_price "preço congelado no momento da criação"
+        numeric total_price
+    }
+    SERVICE_ORDER_STATUS_HISTORY {
+        bigint id PK
+        bigint service_order_id FK
+        varchar status
+        text comment
+        timestamptz changed_at
+    }
+
+    CUSTOMERS ||--o{ VEHICLES : "1:N, ON DELETE CASCADE"
+    CUSTOMERS ||--o{ SERVICE_ORDERS : "1:N"
+    VEHICLES ||--o{ SERVICE_ORDERS : "1:N"
+    SERVICE_ORDERS ||--o{ WORK_ORDER_SERVICES : "1:N, ON DELETE CASCADE"
+    SERVICE_CATALOG_ITEMS ||--o{ WORK_ORDER_SERVICES : "1:N"
+    SERVICE_ORDERS ||--o{ WORK_ORDER_PARTS : "1:N, ON DELETE CASCADE"
+    PARTS ||--o{ WORK_ORDER_PARTS : "1:N"
+    SERVICE_ORDERS ||--o{ SERVICE_ORDER_STATUS_HISTORY : "1:N, ON DELETE CASCADE"
