@@ -382,7 +382,7 @@ Os manifests ficam em [`/k8s`](k8s):
 | `config-secret.yaml`  | `ConfigMap app-config` + `Secret app-secrets` (credenciais de banco, JWT, admin seed e e-mail)   |
 | `banco.yaml`          | `Deployment banco-deployment` + `Service banco-service` (PostgreSQL em pod, **fallback** quando `DB_HOST` não está configurada; o banco real é o RDS) |
 | `app.yaml`            | `Deployment oficina-app-deployment` (com `resources.requests/limits` e probes `startup`/`readiness`/`liveness` no Actuator) + `Service` (ClusterIP) |
-| `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (1 a 5 réplicas, CPU 20%)                               |
+| `hpa.yaml`            | `HorizontalPodAutoscaler oficina-app-hpa` (1 a 5 réplicas, CPU 20%, sobe após 2 min acima do alvo)  |
 | `ingress.yaml`        | `Ingress oficina-app-ingress` (`ingressClassName: kong`) — rota geral que o Kong usa pra encontrar o Service da app |
 | `ingress-public.yaml` | `Ingress oficina-app-public-ingress` — só `/api/public/service-orders/**`, com o plugin `jwt` do Kong anexado (ADR-006) |
 
@@ -1143,8 +1143,8 @@ O que ainda falta, em ordem (acompanhamento detalhado em `STATUS-PROJETO-EQUIPE.
 2. **Probes de saúde**: ~~sem `readinessProbe`, o Kong mandava tráfego para pods ainda subindo (`502`)~~ **corrigido**
    (plano 14: probes `startup`/`readiness`/`liveness` + `/actuator/health/**` liberado no Spring Security). Falta
    confirmar no cluster: sem `502` no deploy e na escala.
-3. **Pico do HPA na inicialização**: com a `readinessProbe`, o HPA passa a descartar a CPU de pods ainda não prontos,
-   então o pico da subida da JVM deve deixar de levá-lo a 5 réplicas. Confirmar no cluster; se persistir, adicionar
-   janela de estabilização no `hpa.yaml`.
+3. **Pico do HPA na inicialização**: a `readinessProbe` não bastou (no cluster, em 12/10, o HPA foi a 5 réplicas
+   ~1 min depois do deploy, com a JVM ainda aquecendo). O `hpa.yaml` ganhou `behavior.scaleUp.stabilizationWindowSeconds:
+   120`: só escala com CPU acima do alvo por 2 min seguidos. Confirmar no cluster.
 4. Remover `k8s/banco.yaml` (Postgres em pod), hoje só fallback.
 

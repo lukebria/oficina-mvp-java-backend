@@ -17,3 +17,9 @@ spec:
         target:
           type: Utilization
           averageUtilization: 20
+  # Plano 14 (validado em 12/10): mesmo com a readinessProbe, logo depois de ficar pronto o pod ainda gasta ~50m de
+  # CPU (JVM aquecendo) - acima do alvo de 20% de 100m - e o HPA ia a 5 réplicas em todo deploy. Com a janela, só
+  # escala se a CPU ficar acima do alvo por 2 min seguidos: o pico da inicialização passa, carga real ainda escala.
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 120
