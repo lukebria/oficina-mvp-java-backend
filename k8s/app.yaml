@@ -4,7 +4,8 @@ kind: Deployment
 metadata:
   name: oficina-app-deployment
 spec:
-  replicas: 1
+  # Sem "replicas": quem decide o número de réplicas é o HPA (k8s/hpa.yaml). Com o campo aqui, todo deploy
+  # voltava o Deployment para 1 réplica por cima da decisão do HPA (plano 16).
   selector:
     matchLabels:
       app: oficina-app
@@ -15,7 +16,9 @@ spec:
     spec:
       containers:
         - name: oficina-app
-          image: ${ECR_REPOSITORY_URL}:latest
+          # Tag = SHA do commit (substituída pelo pipeline): muda a cada deploy, então o Kubernetes faz o rollout dos
+          # pods. Com ":latest" o manifesto não mudava e os pods seguiam com a imagem antiga (plano 16).
+          image: ${ECR_REPOSITORY_URL}:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
